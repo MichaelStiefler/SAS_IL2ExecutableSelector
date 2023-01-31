@@ -1,0 +1,18 @@
+; dinput.def : Declares the module parameters for the DLL.
+
+LIBRARY      "DINPUT.dll"
+;DESCRIPTION  'IL-2 DINPUT Link Library'
+
+EXPORTS
+    ; Explicit exports can go here
+		DirectInputCreateA														@1
+		DirectInputCreateEx														@2
+		DirectInputCreateW														@3
+		DllRegisterServer														PRIVATE
+		DllUnregisterServer														PRIVATE
+		ImmDisableIME															@6
+		Java_com_maddox_sas1946_il2_util_BaseGameVersion_getSelectorInfo		@7
+		Java_com_maddox_rts_SFSInputStream_isDumpMode							@8
+		Java_com_maddox_rts_SFSInputStream_getStartupClass						@9
+		Java_com_maddox_rts_SFSInputStream_freeStartupClasses					@10
+		Java_com_maddox_rts_SFSInputStream_println								@11

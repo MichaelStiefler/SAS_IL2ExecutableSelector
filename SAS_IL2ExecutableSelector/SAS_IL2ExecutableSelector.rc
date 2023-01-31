@@ -1,0 +1,218 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+#include "../global/version.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Neutral resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_NEU)
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON1               ICON                    ".\\SAS.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_IL2EXESELECTOR DIALOGEX 0, 0, 166, 262
+STYLE DS_SETFONT | DS_MODALFRAME | DS_SETFOREGROUND | DS_NOFAILCREATE | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "IL-2 Executable Selector by SAS"
+FONT 16, "Microsoft Sans Serif", 700, 0, 0x0
+BEGIN
+    COMBOBOX        IDC_COMBO_MODTYPES,51,7,100,90,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_EDIT_RAM,83,20,20,12,ES_RIGHT | ES_READONLY | ES_NUMBER,WS_EX_RIGHT
+    CONTROL         "",IDC_SLIDER_RAMSIZE,"msctls_trackbar32",TBS_TOP | TBS_ENABLESELRANGE | WS_TABSTOP,25,32,112,11
+    CONTROL         "Exit Selector when IL-2 Quits",IDC_CHECK_EXIT_WITH_IL2,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,46,110,10
+    CONTROL         "Show Splash Screen",IDC_CHECK_SPLASH_SHOW,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,55,83,10
+    CONTROL         "Dump Mode",IDC_CHECK_DUMP_FILES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,111,54,10
+    CONTROL         "Log SFS File Access",IDC_CHECK_LOG_SFS_ACCESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,76,111,81,10
+    CONTROL         "Enable mod files cache",IDC_CHECK_CACHED_WRAPPER,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,137,91,10
+    CONTROL         "Allow multiple IL-2 instances",IDC_CHECK_MULTI,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,146,108,10
+    CONTROL         "Sticky Splash Screen",IDC_CHECK_SPLASH_TOPMOST,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,7,64,85,10
+    CONTROL         "Adjust IL-2 Path for Hyperlobby",IDC_CHECK_SET_HYPERLOBBY,
+                    "Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,7,78,117,10
+    CONTROL         "Hyperlobby starts game directly",IDC_RADIO_HYPERLOBBY_LAUNCHER,
+                    "Button",BS_AUTORADIOBUTTON | WS_DISABLED | WS_TABSTOP,7,87,118,10
+    CONTROL         "Hyperlobby starts IL-2 Selector",IDC_RADIO_HYPERLOBBY_SELECTOR,
+                    "Button",BS_AUTORADIOBUTTON | WS_DISABLED | WS_TABSTOP,7,96,116,10
+    CONTROL         "Balanced",IDC_RADIO_MEM_BALANCED,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,11,167,38,10
+    CONTROL         "Conservative",IDC_RADIO_MEM_CONSERVATIVE,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,57,167,51,10
+    CONTROL         "Heap only",IDC_RADIO_MEM_HEAPONLY,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,113,167,42,10
+    DEFPUSHBUTTON   "Save Settings",IDC_BUTTON_SAVE_SETTINGS,7,242,74,14
+    PUSHBUTTON      "Cancel",IDC_BUTTON_CANCEL_SETTINGS,84,242,74,14
+    EDITTEXT        IDC_EDIT_JVM_PARAMS,8,193,149,46,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | WS_VSCROLL
+    LTEXT           "Game Type",IDC_STATIC_GAME_TYPE,10,8,38,8
+    LTEXT           "RAM usage:",IDC_STATIC_RAM,42,22,40,8
+    LTEXT           "MB",IDC_STATIC_RAM2,105,22,11,8
+    LTEXT           "128",IDC_STATIC_RAM_MIN,7,34,13,8
+    LTEXT           "4096",IDC_STATIC_RAM_MAX,141,34,17,8
+    GROUPBOX        "Memory Allocation Strategy",IDC_GB_MEM_METHOD,8,159,148,19,WS_DISABLED
+    CTEXT           "Additional JVM Parameters (1 per line)",IDC_STATIC_JVM_PARAMS,13,183,138,8
+    EDITTEXT        IDC_EDIT_MODTYPE_HELP,141,7,6,12,ES_AUTOHSCROLL | NOT WS_VISIBLE
+    GROUPBOX        "EM",IDC_GB_EXPERT_MODE,7,127,151,114
+    CONTROL         "Expert Mode",IDC_CHECK_EXPERT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,126,48,10
+END
+
+IDD_IL2EXESELECTOR_START DIALOGEX 0, 0, 126, 100
+STYLE DS_SETFONT | DS_MODALFRAME | DS_SETFOREGROUND | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "IL-2 Executable Selector by SAS"
+FONT 16, "Microsoft Sans Serif", 700, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "Start IL-2 now!",IDC_BUTTON_START_NOW,7,7,111,14
+    PUSHBUTTON      "Change Settings",IDC_BUTTON_CHANGE_CONFIG,7,23,68,14
+    PUSHBUTTON      "Exit",IDCANCEL,82,23,36,14
+    LISTBOX         IDC_LIST_SETTINGS,7,40,111,52,LBS_NOINTEGRALHEIGHT | LBS_NOSEL | WS_DISABLED | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_IL2EXESELECTOR, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 158
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 255
+    END
+
+    IDD_IL2EXESELECTOR_START, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 118
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 92
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// RT_MANIFEST
+//
+
+1                       RT_MANIFEST             "il2fb.exe.manifest"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION G_FILEVERSION
+ PRODUCTVERSION G_PRODUCTVERSION
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x29L
+#else
+ FILEFLAGS 0x28L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000004b0"
+        BEGIN
+        VALUE "Comments", "please report errors at www.sas1946.com - thank you very much!"
+        VALUE "CompanyName", "SAS - Special Aircraft Service"
+        VALUE "FileDescription", "IL-2 Executable Selector by SAS"
+        VALUE "FileVersion", G_FILE_VERSION
+        VALUE "InternalName", "IL-2 Executable Selector by SAS"
+        VALUE "LegalCopyright", G_COPYRIGHT
+        VALUE "OriginalFilename", "il2fb.exe"
+        VALUE "PrivateBuild", "Created by SAS~Storebror"
+        VALUE "ProductName", "IL-2 Executable Selector by SAS"
+        VALUE "ProductVersion", G_PRODUCT_VERSION
+        VALUE "SpecialBuild", G_SPECIAL_BUILD
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0, 1200
+    END
+END
+
+#endif    // Neutral resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// Englisch (USA) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // Englisch (USA) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

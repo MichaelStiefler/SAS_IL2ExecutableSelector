@@ -1,0 +1,11 @@
+; SAS IL-2 Wrapper.def : Declares the module parameters for the DLL.
+
+LIBRARY      "wrapper.dll"
+;DESCRIPTION  'IL-2 wrapper Dynamic Link Library'
+
+EXPORTS
+    ; Explicit exports can go here
+		__SFS_openf
+	;	__SAS_openf
+	;	ReadDump
+	;	__SFS_openx
