@@ -47,19 +47,19 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 {
     switch(ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
-        StartWrapper(hModule);
+        startWrapper(hModule);
         break;
 
     case DLL_THREAD_ATTACH:
-        ThreadAttach();
+        threadAttach();
         break;
 
     case DLL_THREAD_DETACH:
-        ThreadDetach();
+        threadDetach();
         break;
 
     case DLL_PROCESS_DETACH:
-        StopWrapper();
+        stopWrapper();
         break;
     }
 

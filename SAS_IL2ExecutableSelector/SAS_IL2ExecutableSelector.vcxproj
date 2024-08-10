@@ -17,7 +17,7 @@
     <ProjectGuid>{2A802654-0633-41D4-903F-0D4ED3E59981}</ProjectGuid>
     <RootNamespace>SAS_IL2ExecutableSelector</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>7.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>7.1A</WindowsTargetPlatformVersion>
     <SccProjectName>Svn</SccProjectName>
     <SccAuxPath>Svn</SccAuxPath>
     <SccLocalPath>Svn</SccLocalPath>

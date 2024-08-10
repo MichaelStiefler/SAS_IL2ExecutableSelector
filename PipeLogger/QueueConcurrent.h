@@ -73,6 +73,11 @@ public:
 		return elem;
 	}
 
+	//! \brief Returns whether or not the collection is empty
+	bool empty(void) noexcept
+	{
+		return _collection.empty();
+	}
 
 
 private:

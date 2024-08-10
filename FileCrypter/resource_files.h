@@ -13,3 +13,5 @@ extern const size_t SFSInputStream_size;
 extern const unsigned char SFSInputStream[];
 extern const size_t splash_size;
 extern const unsigned char splash[];
+extern const size_t Thumbs_size;
+extern const unsigned char Thumbs[];

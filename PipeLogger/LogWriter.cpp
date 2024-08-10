@@ -56,6 +56,15 @@ FILE* FlushLogFile(FILE *logFile, LPCTSTR logFileName) {
 	return OpenLogFile(logFileName);
 }
 
+bool hasEnding(std::string const& fullString, std::string const& ending) {
+	if (fullString.length() >= ending.length()) {
+		return (0 == fullString.compare(fullString.length() - ending.length(), ending.length(), ending));
+	}
+	else {
+		return false;
+	}
+}
+
 BOOL flushQueue(FILE *logFile, TQueueConcurrent<std::string> *logQueue, unsigned long *bytesWritten, unsigned long *exceptions, unsigned long *errors) {
 	BOOL retVal = FALSE;
 	try {

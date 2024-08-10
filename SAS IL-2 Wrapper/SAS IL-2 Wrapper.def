@@ -6,6 +6,3 @@ LIBRARY      "wrapper.dll"
 EXPORTS
     ; Explicit exports can go here
 		__SFS_openf
-	;	__SAS_openf
-	;	ReadDump
-	;	__SFS_openx

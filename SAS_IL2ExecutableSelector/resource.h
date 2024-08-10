@@ -48,6 +48,8 @@
 #define IDC_CHECK_LOG_SFS_ACCESS2       1039
 #define IDC_CHECK_DUMP_FILES            1039
 #define IDC_GB_EXPERT_MODE              1040
+#define IDC_CHECK_DUMP_FILES2           1041
+#define IDC_CHECK_RAM_AUTOADJUST        1041
 
 // Next default values for new objects
 // 

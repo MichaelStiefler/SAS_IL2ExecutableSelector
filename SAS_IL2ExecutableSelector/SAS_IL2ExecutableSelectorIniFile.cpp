@@ -130,6 +130,7 @@ void ReadIniSettings()
     }
 
     g_iRamSize = GetPrivateProfileInt(L"Settings", L"RamSize", 512, szIniFile);
+    g_bRamAutoAdjust = GetPrivateProfileInt(L"Settings", L"RamAutoAdjust", 1, szIniFile) == 0 ? FALSE : TRUE;
     g_bExitWithIl2 = GetPrivateProfileInt(L"Settings", L"ExitWithIL2", 0, szIniFile) == 0 ? FALSE : TRUE;
     g_bExpertModeEnabled = GetPrivateProfileInt(L"Settings", L"ExpertMode", 0, szIniFile) == 0 ? FALSE : TRUE;
 	g_iSplashScreenMode = GetPrivateProfileInt(L"Settings", L"SplashScreenMode", 3, szIniFile);
@@ -177,6 +178,7 @@ void WriteIniSettings()
 //	SecureDeleteFile(szIniFile);
     WritePrivateProfileInt(L"Settings", L"ModType", g_iModType, szIniFile);
     WritePrivateProfileInt(L"Settings", L"RamSize", g_iRamSize, szIniFile);
+    WritePrivateProfileInt(L"Settings", L"RamAutoAdjust", (BOOL)g_bRamAutoAdjust, szIniFile);
     WritePrivateProfileInt(L"Settings", L"ExitWithIL2", g_bExitWithIl2, szIniFile);
     WritePrivateProfileInt(L"Settings", L"ExpertMode", g_bExpertModeEnabled, szIniFile);
     WritePrivateProfileInt(L"Settings", L"UseCachedFileLists", (BOOL)(g_bEnableModFilesCache && g_bExpertModeEnabled), szIniFile);

@@ -29,13 +29,13 @@
 #define _CRT_SECURE_NO_WARNINGS
 #pragma warning( disable : 4996 )
 
-extern TCHAR LogFileName[];
+extern std::wstring logFileName;
 
 bool traceLog(LPCSTR output) {
 #ifdef _DEBUG
 	OutputDebugStringA(output);
 #endif
-	if (LogFileName != NULL && _tcslen(LogFileName) != 0) {
+	if (logFileName.length() > 0) {
 		SYSTEMTIME stSystemTime;
 		/////////////////////////////////////////////////////////////////////////
 		// Generate Time Stamp
@@ -44,7 +44,7 @@ bool traceLog(LPCSTR output) {
 		FILE *log;
 
 		while (true) {
-			log = _wfsopen(LogFileName, L"ab", _SH_DENYWR);
+			log = _wfsopen(logFileName.c_str(), L"ab", _SH_DENYWR);
 
 			if (log != NULL) {
 				break;
@@ -82,9 +82,9 @@ bool _trace(TCHAR *format, ...)
 {
 	va_list argptr;
 	va_start(argptr, format);
-	int len = _vsctprintf(format, argptr); // _vscprintf doesn't count terminating '\0'
+	int len = _vscwprintf(format, argptr); // _vscprintf doesn't count terminating '\0'
 	TCHAR* buffer = (TCHAR*)calloc(len + 1, sizeof(TCHAR));
-	_vsntprintf(buffer, len, format, argptr);
+	_vsnwprintf(buffer, len, format, argptr);
 	va_end(argptr);
 	CHAR* cBufLog = (CHAR*)calloc(len + 1, sizeof(CHAR));
 	wcstombs(cBufLog, buffer, len + 1);

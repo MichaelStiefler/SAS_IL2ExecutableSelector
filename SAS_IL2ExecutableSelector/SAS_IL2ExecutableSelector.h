@@ -43,6 +43,7 @@ BOOL g_bExitWithIl2 = FALSE;
 BOOL g_bExpertModeEnabled = FALSE;
 BOOL g_bEnableModFilesCache = FALSE;
 BOOL g_bMultipleInstancesEnabled = FALSE;
+BOOL g_bRamAutoAdjust = FALSE;
 STATUSITEM g_itemStatus[3] = {};
 HBRUSH g_hBrushYellow = NULL;
 HBRUSH g_hBrushRed = NULL;

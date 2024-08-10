@@ -45,6 +45,7 @@ extern BOOL g_bEnableModFilesCache;
 extern BOOL g_bMultipleInstancesEnabled;
 extern BOOL g_bAdjustWindowPos;
 extern BOOL g_bOverrideHLSet;
+extern BOOL g_bRamAutoAdjust;
 extern STATUSITEM g_itemStatus[3];
 extern HBRUSH g_hBrushYellow;
 extern HBRUSH g_hBrushRed;

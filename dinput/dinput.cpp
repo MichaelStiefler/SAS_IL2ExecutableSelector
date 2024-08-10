@@ -360,6 +360,10 @@ JNIEXPORT void JNICALL Java_com_maddox_rts_SFSInputStream_println(JNIEnv* env, j
 	env->ReleaseStringUTFChars(line, nativeString);
 }
 
+//void exiting() {
+//	printf("Exiting\r\n");
+//}
+
 //************************************
 // Method:    SAS_CreateJavaVM
 // FullName:  SAS_CreateJavaVM
@@ -375,6 +379,10 @@ jint JNICALL SAS_CreateJavaVM(JavaVM** p_vm, void** p_env, void* vm_args)
 	// This function is being called when the JMP command has been successfully
 	// injected into JVM.dll and an application calls JNI_CreateJavaVM().
 	TRACE("Hooked \"SAS_CreateJavaVM\" function activated\r\n");
+
+	AdjustRam();
+	AddMandatoryJvmOptions();
+
 	if (g_hIL2GE == NULL && !IsServerExe()) {
 		if (g_bIsOpenGL) {
 			TCHAR szIL2GEFile[MAX_PATH];
@@ -433,6 +441,7 @@ jint JNICALL SAS_CreateJavaVM(JavaVM** p_vm, void** p_env, void* vm_args)
 			newOptions[iCurOption++].optionString = (char*)option.c_str();
 			TRACE("Final JVM Option: %s\r\n", option.c_str());
 		}
+//		newOptions[iCurOption++].optionString = "-version";
 
 		newArgs.options = newOptions;
 		newArgs.nOptions = iCurOption;
@@ -446,6 +455,7 @@ jint JNICALL SAS_CreateJavaVM(JavaVM** p_vm, void** p_env, void* vm_args)
 		TRACE("Error in SAS_CreateJavaVM: Couldn't find original JNI_CreateJavaVM entry point!\r\n");
 		return JNI_ERR;
 	}
+	//std::atexit(exiting);
 
 	// call back into original function JNI_CreateJavaVM() (with restored header)
 	jint jRet = JniCreateJavaVM(p_vm, p_env, &newArgs);
@@ -646,6 +656,60 @@ BOOL file_exists(TCHAR* filePath)
 }
 
 //************************************
+// Method:    CheckRemoveFromJvmOptions
+// FullName:  CheckRemoveFromJvmOptions
+// Access:    public
+// Returns:   int
+// Qualifier:
+// Parameter: LPCSTR lpSearch
+// Parameter: unsigned int iStartIndex
+//************************************
+bool CheckRemoveFromJvmOptions(LPCSTR lpSearch)
+{
+	std::string searchString(lpSearch);
+	std::transform(searchString.begin(), searchString.end(), searchString.begin(), ::tolower);
+	if (searchString.compare(0, 11, "-xx:usesse=") == 0) {
+		searchString = searchString.substr(0, 11);
+	}
+	else if (searchString.compare(0, 4, "-xms") == 0) {
+		searchString = searchString.substr(0, 4);
+	}
+	else if (searchString.compare(0, 4, "-xmx") == 0) {
+		searchString = searchString.substr(0, 4);
+	}
+	else if (searchString.compare(0, 4, "-xss") == 0) {
+		searchString = searchString.substr(0, 4);
+	}
+	else if (searchString.compare(0, 13, "-xx:permsize=") == 0) {
+		searchString = searchString.substr(0, 13);
+	}
+	else if (searchString.compare(0, 16, "-xx:maxpermsize=") == 0) {
+		searchString = searchString.substr(0, 16);
+	}
+	else if (searchString.compare(0, 18, "-djava.class.path=") == 0) {
+		searchString = searchString.substr(0, 18);
+	}
+	else if (searchString.compare(0, 21, "-xx:maxgcpausemillis=") == 0) {
+		searchString = searchString.substr(0, 21);
+	}
+	else if (searchString.compare(0, 26, "-xx:reservedcodecachesize=") == 0) {
+		searchString = searchString.substr(0, 26);
+	}
+	TRACE("Checking for presence of JVM Option: %s\r\n", searchString.c_str());
+	size_t searchStringLen = searchString.length();
+	for (const std::string& jvmOption : JvmOptions) {
+		std::string jvmOptionLower(jvmOption);
+		std::transform(jvmOptionLower.begin(), jvmOptionLower.end(), jvmOptionLower.begin(), ::tolower);
+		if (searchStringLen > jvmOption.length()) continue;
+		if (jvmOptionLower._Starts_with(searchString)) {
+			TRACE("Removing JVM Option: %s\r\n", jvmOption.c_str());
+			JvmOptions.erase(jvmOption);
+		}
+	}
+	return false;
+}
+
+//************************************
 // Method:    AddJvmOption
 // FullName:  AddJvmOption
 // Access:    public
@@ -656,12 +720,12 @@ BOOL file_exists(TCHAR* filePath)
 void AddJvmOption(LPCSTR lpOptionString)
 {
 	std::string newOption(lpOptionString);
+	CheckRemoveFromJvmOptions(lpOptionString);
 	std::pair optionInsert = JvmOptions.emplace(newOption);
 	if (!optionInsert.second) {
 		JvmOptions.erase(optionInsert.first);
 		JvmOptions.emplace(newOption);
 	}
-
 	TRACE("Added JVM Option: %s\r\n", newOption.c_str());
 }
 
@@ -786,7 +850,7 @@ void AdjustJvmParams()
 		g_bCpuInfo = GetCpuID();
 		TRACE("CPU ID = %08X\r\n", g_bCpuInfo);
 		if (g_bCpuInfo & 0x30000) { // SSE4
-			if (!IsInJvmOptions("-XX:UseSSE=4")) {
+			if (!IsInJvmOptions("-XX:UseSSE=")) {
 				AddJvmOption("-XX:UseSSE=4");
 			}
 			if (!IsInJvmOptions("-XX:+UseSSE42Intrinsics")) {
@@ -794,7 +858,7 @@ void AdjustJvmParams()
 			}
 		}
 		else if (g_bCpuInfo & 0xC0) { // SSE3
-			if (!IsInJvmOptions("-XX:UseSSE=3")) {
+			if (!IsInJvmOptions("-XX:UseSSE=")) {
 				AddJvmOption("-XX:UseSSE=3");
 			}
 			if (!IsInJvmOptions("-XX:-UseSSE42Intrinsics")) {
@@ -802,7 +866,7 @@ void AdjustJvmParams()
 			}
 		}
 		else if (g_bCpuInfo & 0x20) { // SSE2
-			if (!IsInJvmOptions("-XX:UseSSE=2")) {
+			if (!IsInJvmOptions("-XX:UseSSE=")) {
 				AddJvmOption("-XX:UseSSE=2");
 			}
 			if (!IsInJvmOptions("-XX:-UseSSE42Intrinsics")) {
@@ -810,7 +874,7 @@ void AdjustJvmParams()
 			}
 		}
 		else if (g_bCpuInfo & 0x4) { // SSE1
-			if (!IsInJvmOptions("-XX:UseSSE=1")) {
+			if (!IsInJvmOptions("-XX:UseSSE=")) {
 				AddJvmOption("-XX:UseSSE=1");
 			}
 			if (!IsInJvmOptions("-XX:-UseSSE42Intrinsics")) {
@@ -982,6 +1046,29 @@ void AdjustJvmParams()
 	CloseHandle(hCurProc);
 }
 
+#define MAX_SYSTEM_PROGRAM (4096)
+int windows_system(LPCSTR cmd)
+{
+	PROCESS_INFORMATION p_info;
+	STARTUPINFO s_info;
+	DWORD ReturnValue;
+
+	memset(&s_info, 0, sizeof(s_info));
+	memset(&p_info, 0, sizeof(p_info));
+	s_info.cb = sizeof(s_info);
+
+	wchar_t utf16cmd[MAX_SYSTEM_PROGRAM] = { 0 };
+	MultiByteToWideChar(CP_UTF8, 0, cmd, -1, utf16cmd, MAX_SYSTEM_PROGRAM);
+	if (CreateProcessW(NULL, utf16cmd, NULL, NULL, 0, 0, NULL, NULL, &s_info, &p_info))
+	{
+		WaitForSingleObject(p_info.hProcess, INFINITE);
+		GetExitCodeProcess(p_info.hProcess, &ReturnValue);
+		CloseHandle(p_info.hProcess);
+		CloseHandle(p_info.hThread);
+	}
+	return ReturnValue;
+}
+
 //************************************
 // Method:    ReadSelectorSettings
 // FullName:  ReadSelectorSettings
@@ -992,8 +1079,11 @@ void AdjustJvmParams()
 void ReadSelectorSettings()
 {
 	bDisableMutex = (GetPrivateProfileInt(L"Settings", L"MultipleInstances", 0, szIniFile) != 0);
-	int iSelectorRamSize = GetPrivateProfileInt(L"Settings", L"RamSize", 0, szIniFile);
-	int iSelectorMemStrategy = GetPrivateProfileInt(L"Settings", L"MemoryStrategy", 0, szIniFile);
+	//int iSelectorRamSize = GetPrivateProfileInt(L"Settings", L"RamSize", 0, szIniFile);
+	g_iSelectorRamSize = GetPrivateProfileInt(L"Settings", L"RamSize", 0, szIniFile);
+	g_bRamAutoAdjust = GetPrivateProfileInt(L"Settings", L"RamAutoAdjust", 1, szIniFile) == 0 ? FALSE : TRUE;
+	//int iSelectorMemStrategy = GetPrivateProfileInt(L"Settings", L"MemoryStrategy", 0, szIniFile);
+	g_iSelectorMemStrategy = GetPrivateProfileInt(L"Settings", L"MemoryStrategy", 0, szIniFile);
 	g_iSplashScreenMode = GetPrivateProfileInt(L"Settings", L"SplashScreenMode", 0, szIniFile);
 	int iDumpMode = GetPrivateProfileInt(L"Settings", L"DumpMode", 0, szIniFile);
 	if (iDumpMode & 0x01) g_bDumpSFSAccess = TRUE;
@@ -1014,63 +1104,85 @@ void ReadSelectorSettings()
 
 	g_iDebugMode = GetPrivateProfileInt(L"Settings", L"DebugMode", 0, szIniFile);
 
-	if (iSelectorRamSize != 0) {
+	//if (g_bRamAutoAdjust) {
+	//	// Try to find out max RAM setting
+	//	_stprintf(szJvmPath, L"\"%sbin\\javaw.exe\"", szCurDir);
+	//	int ramValue = 2000;
+	//	std::wstring wJvmPath = szJvmPath;
+	//	while (true) {
+	//		std::string syscall = std::string(wJvmPath.begin(), wJvmPath.end()) + " -Xms" + std::to_string(ramValue) + "M -Xmx" + std::to_string(ramValue) + "M -version > nul";
+	//		//int exitCode = std::system(syscall.c_str());
+	//		int exitCode = windows_system(syscall.c_str());
+	//		if (exitCode == 0) break;
+	//		if (ramValue < 96) break;
+	//		ramValue -= 10;
+	//	}
+	//	iSelectorRamSize = (int)(ramValue * 0.9);
+	//	TRACE("Java max RAM = %dM, Selector Auto Adjusted RAM Size = %dM\r\n", ramValue, iSelectorRamSize);
+	//}
 
-		TRACE("Applying JVM Memory Settings from IL-2 Selector...\r\n");
-		int iStackSize = (iSelectorRamSize * 1024) / XSS_DIVIDER;
-		int iPermSize = iSelectorRamSize / PERM_DIVIDER;
+	//if (iSelectorRamSize != 0) {
 
-		switch (iSelectorMemStrategy) {
-		case MEM_STRATEGY_CONSERVATIVE:
-			iStackSize /= 2;
-			iPermSize /= 2;
-			break;
+	//	TRACE("Applying JVM Memory Settings from IL-2 Selector...\r\n");
+	//	int iStackSize = (iSelectorRamSize * 1024) / XSS_DIVIDER;
+	//	int iPermSize = iSelectorRamSize / PERM_DIVIDER;
 
-		case MEM_STRATEGY_HEAPONLY:
-			iStackSize = 0;
-			iPermSize = 0;
-			break;
+	//	switch (iSelectorMemStrategy) {
+	//	case MEM_STRATEGY_CONSERVATIVE:
+	//		iStackSize /= 2;
+	//		iPermSize /= 2;
+	//		break;
 
-		default:
-			break;
-		}
+	//	case MEM_STRATEGY_HEAPONLY:
+	//		iStackSize = 0;
+	//		iPermSize = 0;
+	//		break;
 
-		int iDynamicSize = iSelectorRamSize - (iStackSize / 1024) - iPermSize;
-		ZeroMemory(cBuffer, sizeof(cBuffer));
-		sprintf(cBuffer, "-Xms%dM", iDynamicSize);
-		AddJvmOption(cBuffer);
-		//ZeroMemory(cBuffer, sizeof(cBuffer));
-		//sprintf(cBuffer, "-XX:InitialHeapSize=%dM", iDynamicSize);
-		//AddJvmOption(cBuffer);
-		ZeroMemory(cBuffer, sizeof(cBuffer));
-		sprintf(cBuffer, "-Xmx%dM", iDynamicSize);
-		AddJvmOption(cBuffer);
-		//ZeroMemory(cBuffer, sizeof(cBuffer));
-		//sprintf(cBuffer, "-XX:MaxHeapSize=%dM", iDynamicSize);
-		//AddJvmOption(cBuffer);
+	//	default:
+	//		break;
+	//	}
+	//	if (iStackSize > 1024) iStackSize = 1024;
+	//	if (iPermSize < 32) iPermSize = 32;
+	//	if (iPermSize > 256) iPermSize = 256;
 
-		if (iSelectorMemStrategy == MEM_STRATEGY_HEAPONLY) {
-			// TRACE("ReadSelectorSettings()---1\r\n");
-			return;
-		}
+	//	int iDynamicSize = iSelectorRamSize - (iStackSize / 1024) - iPermSize;
+	//	if (iDynamicSize < 96) iDynamicSize = 96;
+	//	ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	//sprintf(cBuffer, "-Xms%dM", iDynamicSize);
+	//	sprintf(cBuffer, "-Xms96M", iDynamicSize);
+	//	AddJvmOption(cBuffer);
+	//	//ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	//sprintf(cBuffer, "-XX:InitialHeapSize=%dM", iDynamicSize);
+	//	//AddJvmOption(cBuffer);
+	//	ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	sprintf(cBuffer, "-Xmx%dM", iDynamicSize);
+	//	AddJvmOption(cBuffer);
+	//	//ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	//sprintf(cBuffer, "-XX:MaxHeapSize=%dM", iDynamicSize);
+	//	//AddJvmOption(cBuffer);
 
-		ZeroMemory(cBuffer, sizeof(cBuffer));
-		if (g_bIs415 && iStackSize > 1024) iStackSize = 1024;
-		sprintf(cBuffer, "-Xss%dK", iStackSize);
-		AddJvmOption(cBuffer);
-		//ZeroMemory(cBuffer, sizeof(cBuffer));
-		//sprintf(cBuffer, "-XX:ThreadStackSize=%d", iStackSize);
-		//AddJvmOption(cBuffer);
-		 
-		if (!g_bIs415) {
-			ZeroMemory(cBuffer, sizeof(cBuffer));
-			sprintf(cBuffer, "-XX:PermSize=%dM", iPermSize);
-			AddJvmOption(cBuffer);
-			ZeroMemory(cBuffer, sizeof(cBuffer));
-			sprintf(cBuffer, "-XX:MaxPermSize=%dM", iPermSize);
-			AddJvmOption(cBuffer);
-		}
-	}
+	//	if (iSelectorMemStrategy == MEM_STRATEGY_HEAPONLY) {
+	//		// TRACE("ReadSelectorSettings()---1\r\n");
+	//		return;
+	//	}
+
+	//	ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	if (g_bIs415 && iStackSize > 1024) iStackSize = 1024;
+	//	sprintf(cBuffer, "-Xss%dK", iStackSize);
+	//	AddJvmOption(cBuffer);
+	//	//ZeroMemory(cBuffer, sizeof(cBuffer));
+	//	//sprintf(cBuffer, "-XX:ThreadStackSize=%d", iStackSize);
+	//	//AddJvmOption(cBuffer);
+	//	 
+	//	if (!g_bIs415) {
+	//		//ZeroMemory(cBuffer, sizeof(cBuffer));
+	//		//sprintf(cBuffer, "-XX:PermSize=%dM", iPermSize);
+	//		//AddJvmOption(cBuffer);
+	//		ZeroMemory(cBuffer, sizeof(cBuffer));
+	//		sprintf(cBuffer, "-XX:MaxPermSize=%dM", iPermSize);
+	//		AddJvmOption(cBuffer);
+	//	}
+	//}
 
 	g_iModType = GetPrivateProfileInt(L"Settings", L"ModType", 0, szIniFile);
 	memset(szBuffer2, 0, sizeof(szBuffer2));
@@ -1103,6 +1215,105 @@ void ReadSelectorSettings()
 	memset(g_szSplashImage, 0, sizeof(g_szSplashImage));
 	GetPrivateProfileString(szBuffer2, L"Splash", L"", g_szSplashImage, sizeof(g_szSplashImage) / sizeof(TCHAR), szIniFile);
 }
+
+float cvt(float value, float inmin, float inmax, float outmin, float outmax)
+{
+	return outmin + (outmax - outmin) * (min(max(value, inmin), inmax) - inmin) / (inmax - inmin);
+}
+
+
+//************************************
+// Method:    AdjustRam
+// FullName:  AdjustRam
+// Access:    public
+// Returns:   void
+// Qualifier:
+//************************************
+void AdjustRam()
+{
+	if (g_bRamAutoAdjust) {
+		// Try to find out max RAM setting
+		_stprintf(szJvmPath, L"\"%sbin\\javaw.exe\"", szCurDir);
+		int ramValue = 2000;
+		std::wstring wJvmPath = szJvmPath;
+		while (true) {
+			std::string syscall = std::string(wJvmPath.begin(), wJvmPath.end()) + " -Xms" + std::to_string(ramValue) + "M -Xmx" + std::to_string(ramValue) + "M -version > nul";
+			//int exitCode = std::system(syscall.c_str());
+			int exitCode = windows_system(syscall.c_str());
+			if (exitCode == 0) break;
+			if (ramValue < 96) break;
+			ramValue -= 10;
+		}
+		g_iSelectorRamSize = (int)(ramValue * (IsServerExe()?0.80:0.95)); // 0.75:0.85
+		TRACE("Java max RAM = %dM, Selector Auto Adjusted RAM Size = %dM\r\n", ramValue, g_iSelectorRamSize);
+	}
+
+	if (g_iSelectorRamSize != 0) {
+
+		TRACE("Applying JVM Memory Settings from IL-2 Selector...\r\n");
+		int iStackSize = (g_iSelectorRamSize * 1024) / XSS_DIVIDER;
+		int iPermSize = (int)((float)g_iSelectorRamSize / cvt((float)g_iSelectorRamSize, 512.0f, 1024.0f, 2.0f, 3.0f));     //permDivider; // PERM_DIVIDER;
+
+		switch (g_iSelectorMemStrategy) {
+		case MEM_STRATEGY_CONSERVATIVE:
+			iStackSize /= 2;
+			iPermSize /= 2;
+			break;
+
+		case MEM_STRATEGY_HEAPONLY:
+			iStackSize = 0;
+			iPermSize = 0;
+			break;
+
+		default:
+			break;
+		}
+		if (iStackSize > 1024) iStackSize = 1024;
+		if (iPermSize < 64) iPermSize = 64;
+		iPermSize = (iPermSize / 4) * 4; // Size of Perm Space must be aligned to 2MB, we choose 4MB to be on the safe side.
+		//if (iPermSize > 256) iPermSize = 256;
+
+		int iDynamicSize = g_iSelectorRamSize - (iStackSize / 1024) - iPermSize;
+		if (iDynamicSize < 96) iDynamicSize = 96;
+		ZeroMemory(cBuffer, sizeof(cBuffer));
+		//sprintf(cBuffer, "-Xms%dM", iDynamicSize);
+		sprintf(cBuffer, "-Xms96M");// , iDynamicSize);
+		if (!IsInJvmOptions("-Xms")) AddJvmOption(cBuffer);
+		//ZeroMemory(cBuffer, sizeof(cBuffer));
+		//sprintf(cBuffer, "-XX:InitialHeapSize=%dM", iDynamicSize);
+		//AddJvmOption(cBuffer);
+		ZeroMemory(cBuffer, sizeof(cBuffer));
+		sprintf(cBuffer, "-Xmx%dM", iDynamicSize);
+		if (!IsInJvmOptions("-Xmx")) AddJvmOption(cBuffer);
+		//ZeroMemory(cBuffer, sizeof(cBuffer));
+		//sprintf(cBuffer, "-XX:MaxHeapSize=%dM", iDynamicSize);
+		//AddJvmOption(cBuffer);
+
+		if (g_iSelectorMemStrategy == MEM_STRATEGY_HEAPONLY) {
+			// TRACE("ReadSelectorSettings()---1\r\n");
+			return;
+		}
+
+		ZeroMemory(cBuffer, sizeof(cBuffer));
+		if (g_bIs415 && iStackSize > 1024) iStackSize = 1024;
+		sprintf(cBuffer, "-Xss%dK", iStackSize);
+		if (!IsInJvmOptions("-Xss")) AddJvmOption(cBuffer);
+		//ZeroMemory(cBuffer, sizeof(cBuffer));
+		//sprintf(cBuffer, "-XX:ThreadStackSize=%d", iStackSize);
+		//AddJvmOption(cBuffer);
+
+		if (!g_bIs415) {
+			//ZeroMemory(cBuffer, sizeof(cBuffer));
+			//sprintf(cBuffer, "-XX:PermSize=%dM", iPermSize);
+			//AddJvmOption(cBuffer);
+			ZeroMemory(cBuffer, sizeof(cBuffer));
+			sprintf(cBuffer, "-XX:MaxPermSize=%dM", iPermSize);
+			if (!IsInJvmOptions("-XX:MaxPermSize=")) AddJvmOption(cBuffer);
+		}
+	}
+
+}
+
 
 //************************************
 // Method:    ReadConfSettings
@@ -1169,7 +1380,7 @@ void AddMandatoryJvmOptions()
 				AddJvmOption("-Djava.class.path=.");
 			}
 
-			if (!IsInJvmOptions("-Xverify")) {
+			if (!IsInJvmOptions("-Xverify:")) {
 				AddJvmOption("-Xverify:remote");
 			}
 
@@ -1177,7 +1388,7 @@ void AddMandatoryJvmOptions()
 				AddJvmOption("-Xcomp");
 			}
 		}
-		if (!IsInJvmOptions("-XX:MaxGCPauseMillis")) {
+		if (!IsInJvmOptions("-XX:MaxGCPauseMillis=")) {
 			AddJvmOption("-XX:MaxGCPauseMillis=1000");
 		}
 		if (!IsInJvmOptions("-XX:+PrintCommandLineFlags")) {
@@ -1192,7 +1403,7 @@ void AddMandatoryJvmOptions()
 		if (!IsInJvmOptions("-XX:+UseStringDeduplication")) {
 			AddJvmOption("-XX:+UseStringDeduplication");
 		}
-		if (!IsInJvmOptions("-XX:ReservedCodeCacheSize")) {
+		if (!IsInJvmOptions("-XX:ReservedCodeCacheSize=")) {
 			AddJvmOption("-XX:ReservedCodeCacheSize=128m");
 		}
 		if (!IsInJvmOptions("-XX:+PrintCodeCache")) {
@@ -1210,16 +1421,19 @@ void AddMandatoryJvmOptions()
 			AddJvmOption("-Xcomp");
 		}
 		else {
-			if (!IsInJvmOptions("-Djava.class.path")) {
+			if (!IsInJvmOptions("-Djava.class.path=")) {
 				AddJvmOption("-Djava.class.path=.");
 			}
 
-			if (!IsInJvmOptions("-Xverify")) {
+			if (!IsInJvmOptions("-Xverify:")) {
 				AddJvmOption("-Xverify:none");
 			}
 
 			if (!IsInJvmOptions("-Xcomp")) {
 				AddJvmOption("-Xcomp");
+			}
+			if (!IsInJvmOptions("-Xnoclassgc")) {
+				AddJvmOption("-Xnoclassgc");
 			}
 		}
 	}
@@ -1238,7 +1452,7 @@ void GetParams()
 	ReadSelectorSettings();
 	ReadConfSettings();
 	ReadJvmOptions();
-	AddMandatoryJvmOptions();
+	//AddMandatoryJvmOptions();
 }
 
 //************************************

@@ -18,14 +18,14 @@
 //
 // DO WHAT THE FUCK YOU WANT TO WITH IT PUBLIC LICENSE
 // TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
 //
 // 0. You just DO WHAT THE FUCK YOU WANT TO WITH IT.
 //
 //*****************************************************************
 
 #include "stdafx.h"
-//#include <vector>
-//#include <algorithm>
+//#include <windows.h>
 #include <Shellapi.h>
 
 #include "SAS IL-2 Wrapper.h"
@@ -33,7 +33,6 @@
 #include "trace.h"
 
 #include "resource.h"
-//#include <set>
 using namespace std;
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -62,32 +61,16 @@ ULONGLONG First;
 HINSTANCE hExecutable = NULL;
 TSFS_open* SFS_open = NULL;
 TSFS_openf* SFS_openf = NULL;
-//TSFS_read* SFS_read = NULL;
-//TSFS_lseek* SFS_lseek = NULL;
 TSFS_open_cpp* SFS_open_cpp = NULL;
 TSFS_openf_cpp* SFS_openf_cpp = NULL;
 
-bool g_bUseCachedFileLists = FALSE;
-FILE *g_cachedListFile = NULL;
+std::wstring logFileName, filesFolder, modsFolder, cachedListFileName, exeName, exePath, iniFileName, curParam, linkBackName;
 
-static TCHAR	szHashString[32],
-szBuf[MAX_PATH],
-ExeName[MAX_PATH],
-ExePath[MAX_PATH],
-FilesFolder[MAX_PATH],
-ModsFolder[MAX_PATH],
-CurParam[MAX_PATH],
-LinkBackName[MAX_PATH],
-IniFileName[MAX_PATH],
-CachedListFileName[MAX_PATH];
-static CHAR cBuf[MAX_PATH];
-TCHAR LogFileName[MAX_PATH];
+std::vector<MyFileListItem*> fileList;
 
-std::vector<MyFileListItem*> FileList;
-
-BOOL g_bDumpFileAccess = FALSE;
-BOOL g_bDumpClassFiles = FALSE;
-BOOL g_bDumpOtherFiles = FALSE;
+bool g_bDumpFileAccess = FALSE;
+bool g_bDumpClassFiles = FALSE;
+bool g_bDumpOtherFiles = FALSE;
 
 //************************************
 // Method:    ThreadAttach
@@ -96,10 +79,10 @@ BOOL g_bDumpOtherFiles = FALSE;
 // Returns:   void
 // Qualifier:
 //************************************
-void ThreadAttach()
+void threadAttach()
 {
 	iThreadAttachCounter++;
-	TRACE("ThreadAttach, attached Threads =  %d\r\n", iThreadAttachCounter);
+	TRACE(L"ThreadAttach, attached Threads =  %d\r\n", iThreadAttachCounter);
 }
 
 //************************************
@@ -109,10 +92,10 @@ void ThreadAttach()
 // Returns:   void
 // Qualifier:
 //************************************
-void ThreadDetach()
+void threadDetach()
 {
 	iThreadAttachCounter--;
-	TRACE("ThreadDetach, attached Threads =  %d\r\n", iThreadAttachCounter);
+	TRACE(L"ThreadDetach, attached Threads =  %d\r\n", iThreadAttachCounter);
 }
 
 //************************************
@@ -123,110 +106,79 @@ void ThreadDetach()
 // Qualifier:
 // Parameter: HINSTANCE hInstance
 //************************************
-void StartWrapper(HINSTANCE hInstance)
+void startWrapper(HINSTANCE hInstance)
 {
 #ifdef _DEBUG
-	HWND hSplash = FindWindow(_T("Il2SASLauncherWnd"), NULL);
+	HWND hSplash = FindWindow(L"Il2SASLauncherWnd", NULL);
 	if (hSplash != NULL) PostMessage(hSplash, WM_CLOSE, 0, 0);
 #endif
 	iProcessAttachCounter++;
-
-
 	if (iProcessAttachCounter == 1) {
-		GetModuleFileName(NULL, ExeName, MAX_PATH);
-		_tcscpy(LinkBackName, ExeName);
-		_tcscpy(ExePath, ExeName);
-		LPTSTR lpExePathDelimiter = _tcsrchr(ExePath, L'\\');
-		_tcscpy(&lpExePathDelimiter[1], L"");
-		_stprintf(LogFileName, L"%s%s", ExePath, LOGFILE_NAME);
+		exeName = getCurrentExecutablePathName();
+		linkBackName = exeName;
+		exePath = getDirectoryWithCurrentExecutable() + L"\\";
+		logFileName = exePath + LOGFILE_NAME;
 	}
-
-	TRACE("ProcessAttach, attached Processes =  %d\r\n", iProcessAttachCounter);
+	TRACE(L"ProcessAttach, attached Processes =  %d\r\n", iProcessAttachCounter);
 
 	if (iProcessAttachCounter > 1) {
 		return;
 	}
 
-	_tcscpy(FilesFolder, L"FILES");
-	_tcscpy(ModsFolder, L"MODS");
-	FileList.clear();
+	filesFolder = L"FILES";
+	modsFolder = L"MODS";
+	fileList.clear();
 	ULONGLONG ullFreq;
 	QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&ullFreq));
 	ulFreq = (ULONG)ullFreq;
 	g_dwIndex = 0;
-	TRACE("Calling GetCommandLineParams()\r\n");
-	GetCommandLineParams();
-	TRACE("Calling LinkIl2fbExe()\r\n");
-	LinkIl2fbExe();
+	TRACE(L"Calling getCommandLineParams()\r\n");
+	getCommandLineParams();
+	TRACE(L"Calling linkIl2fbExe()\r\n");
+	linkIl2fbExe();
 	float fCreateMods = 0, fCreateFiles = 0, fSortList = 0, fRemoveDups = 0;
 
 	try {
-		if (_tcsicmp(ModsFolder, L"none") != 0) {
-			if (DirectoryExists(ModsFolder)) {
-				if (g_bUseCachedFileLists) {
-					TRACE("Calling CreateCachedModsFolderList()\r\n");
-					bool bCacheUsed = CreateCachedModsFolderList(&fCreateMods);
-					TRACE(L"Scanning %s folder took %.0f milliseconds %s\r\n", ModsFolder, fCreateMods / DIVIDER_MILLISECONDS, bCacheUsed ? L"(cached).\r\n" : L"(cache created).\r\n");
+		if (!iequals(modsFolder, L"none")) {
+			if (directoryExists(modsFolder)) {
+				cachedListFileName = exePath + modsFolder + L"\\~wrapper.cache";
+				if (fileExists(cachedListFileName)) {
+					DeleteFileW(cachedListFileName.c_str());
 				}
-				else {
-					_stprintf(CachedListFileName, L"%s%s\\~wrapper.cache", ExePath, ModsFolder);
-
-					if (FileExists(CachedListFileName)) {
-						DeleteFile(CachedListFileName);
-					}
-
-					TRACE("Calling CreateModsFolderList()\r\n");
-					CreateModsFolderList(&fCreateMods);
-					TRACE(L"Scanning %s folder took %.0f milliseconds.\r\n", ModsFolder, fCreateMods / DIVIDER_MILLISECONDS);
-				}
+				TRACE(L"Calling createModsFolderList()\r\n");
+				createModsFolderList(&fCreateMods);
+				TRACE(L"Scanning %s folder took %.0f milliseconds.\r\n", modsFolder.c_str(), fCreateMods / DIVIDER_MILLISECONDS);
 			}
 		}
 	}
 	catch (...) {
-		TRACE(L"Error loading files from Folder %s\r\n", ModsFolder);
+		TRACE(L"Error loading files from Folder %s\r\n", modsFolder.c_str());
 	}
 
 	try {
-		if (_tcsicmp(FilesFolder, L"none") != 0) {
-			if (DirectoryExists(FilesFolder)) {
-				if (g_bUseCachedFileLists) {
-					TRACE("Calling CreateCachedFilesFolderList()\r\n");
-					bool bCacheUsed = CreateCachedFilesFolderList(&fCreateFiles);
-					TRACE(L"Scanning %s folder took %.0f milliseconds ", FilesFolder, fCreateFiles / DIVIDER_MILLISECONDS);
-
-					if (bCacheUsed) {
-						TRACE("(cached).\r\n");
-					}
-					else {
-						TRACE("(cache created).\r\n");
-					}
+		if (!iequals(filesFolder, L"none")) {
+			if (directoryExists(filesFolder)) {
+				cachedListFileName = exePath + filesFolder + L"\\~wrapper.cache";
+				if (fileExists(cachedListFileName)) {
+					DeleteFileW(cachedListFileName.c_str());
 				}
-				else {
-					_stprintf(CachedListFileName, L"%s%s\\~wrapper.cache", ExePath, FilesFolder);
-
-					if (FileExists(CachedListFileName)) {
-						DeleteFile(CachedListFileName);
-					}
-
-					TRACE("Calling CreateFilesFolderList()\r\n");
-					CreateFilesFolderList(&fCreateFiles);
-					TRACE(L"Scanning %s folder took %.0f milliseconds.\r\n", FilesFolder, fCreateFiles / DIVIDER_MILLISECONDS);
-				}
+				TRACE(L"Calling createFilesFolderList()\r\n");
+				createFilesFolderList(&fCreateFiles);
+				TRACE(L"Scanning %s folder took %.0f milliseconds.\r\n", filesFolder.c_str(), fCreateFiles / DIVIDER_MILLISECONDS);
 			}
 		}
 	}
 	catch (...) {
-		TRACE(L"Error loading files from Folder %s\r\n", FilesFolder);
+		TRACE(L"Error loading files from Folder %s\r\n", filesFolder.c_str());
 	}
 
-	TRACE("Total number of modded files = %d.\r\n", g_dwIndex);
-	TRACE("Calling SortList()\r\n");
-	SortList(&fSortList);
-	TRACE("Sorting modded files list took %.3f milliseconds.\r\n", fSortList / DIVIDER_MILLISECONDS);
-	TRACE("Calling RemoveDuplicates()\r\n");
-	int iDups = RemoveDuplicates(&fRemoveDups);
-	TRACE("Removing %d Duplicates took %.3f milliseconds.\r\n", iDups, fRemoveDups / DIVIDER_MILLISECONDS);
-
+	TRACE(L"Total number of modded files = %d.\r\n", g_dwIndex);
+	TRACE(L"Calling sortList()\r\n");
+	sortList(&fSortList);
+	TRACE(L"Sorting modded files list took %.3f milliseconds.\r\n", fSortList / DIVIDER_MILLISECONDS);
+	TRACE(L"Calling removeDuplicates()\r\n");
+	int iDups = removeDuplicates(&fRemoveDups);
+	TRACE(L"Removing %d Duplicates took %.3f milliseconds.\r\n", iDups, fRemoveDups / DIVIDER_MILLISECONDS);
 }
 
 //************************************
@@ -236,29 +188,28 @@ void StartWrapper(HINSTANCE hInstance)
 // Returns:   void
 // Qualifier:
 //************************************
-void StopWrapper()
+void stopWrapper()
 {
 	iProcessAttachCounter--;
-	TRACE("ProcessDetach, attached Processes =  %d\r\n", iProcessAttachCounter);
+	TRACE(L"ProcessDetach, attached Processes =  %d\r\n", iProcessAttachCounter);
 
 	if (iProcessAttachCounter > 0) {
 		return;
 	}
 
-	FileList.clear();
-	TRACE("Total files opened = %d\r\n", g_SFSOpenfCalls);
-	TRACE("Files loaded from SFS archives = %d\r\n", g_SFSOpenf_from_SFS);
-	TRACE("Files loaded from mod folders  = %d\r\n", g_SFSOpenf_found_hash1 + g_SFSOpenf_found_hash2);
-	TRACE("  ~ using 1st level hash match = %d\r\n", g_SFSOpenf_found_hash1);
-	TRACE("  ~ using 2nd level hash match = %d\r\n", g_SFSOpenf_found_hash2);
-	TRACE("Files not found                = %d\r\n", g_SFSOpenf_not_found);
+	fileList.clear();
+	TRACE(L"Total files opened = %d\r\n", g_SFSOpenfCalls);
+	TRACE(L"Files loaded from SFS archives = %d\r\n", g_SFSOpenf_from_SFS);
+	TRACE(L"Files loaded from mod folders  = %d\r\n", g_SFSOpenf_found_hash1 + g_SFSOpenf_found_hash2);
+	TRACE(L"  ~ using 1st level hash match = %d\r\n", g_SFSOpenf_found_hash1);
+	TRACE(L"  ~ using 2nd level hash match = %d\r\n", g_SFSOpenf_found_hash2);
+	TRACE(L"Files not found                = %d\r\n", g_SFSOpenf_not_found);
 	float fTotalSearchSeconds = g_SearchPikoseconds / DIVIDER_SECONDS;
-	TRACE("Total search time consumed = %.3f milliseconds (%.12f Seconds)\r\n", g_SearchPikoseconds / DIVIDER_MILLISECONDS, fTotalSearchSeconds);
-	LONG lSFSOpenfCalls = long(g_SFSOpenfCalls);
-	float fTest = g_SearchPikoseconds / float(lSFSOpenfCalls) / 1000.0f;
-	TRACE("Search Time per File = %.3f nanoseconds (%.12f Seconds)\r\n", g_SearchPikoseconds / float(lSFSOpenfCalls) / 1000.0f, g_SearchPikoseconds / float(lSFSOpenfCalls) / DIVIDER_SECONDS);
+	TRACE(L"Total search time consumed = %.3f milliseconds (%.12f Seconds)\r\n", g_SearchPikoseconds / DIVIDER_MILLISECONDS, fTotalSearchSeconds);
+	float fTest = g_SearchPikoseconds / float(g_SFSOpenfCalls) / 1000.0f;
+	TRACE(L"Search Time per File = %.3f nanoseconds (%.12f Seconds)\r\n", g_SearchPikoseconds / float(g_SFSOpenfCalls) / 1000.0f, g_SearchPikoseconds / float(g_SFSOpenfCalls) / DIVIDER_SECONDS);
 	float fSearchIterationsPerFile = float(g_SearchIterations) / float(g_SFSOpenfCalls);
-	TRACE("Average Search Iterations required per File = %.1f\r\n", fSearchIterationsPerFile);
+	TRACE(L"Average Search Iterations required per File = %.1f\r\n", fSearchIterationsPerFile);
 
 	if (hExecutable != NULL) {
 		FreeLibrary(hExecutable);
@@ -275,7 +226,7 @@ void StopWrapper()
 // Parameter: const void * mfli1
 // Parameter: const void * mfli2
 //************************************
-int __cdecl CompareFileList(const void *mfli1, const void *mfli2)
+int __cdecl compareFileList(const void* mfli1, const void* mfli2)
 {
 	int iRet = 0;
 
@@ -303,11 +254,11 @@ int __cdecl CompareFileList(const void *mfli1, const void *mfli2)
 // Qualifier:
 // Parameter: float * pfPikoSeconds
 //************************************
-void SortList(float * pfPikoSeconds)
+void sortList(float* pfPikoSeconds)
 {
-	StopWatchStart(pfPikoSeconds);
-	if (!FileList.empty()) std::qsort(&*FileList.begin(), FileList.size(), sizeof(MyFileListItem*), CompareFileList);   // sort and keep original relative order of equivalent elements.
-	StopWatchStop(pfPikoSeconds);
+	stopWatchStart(pfPikoSeconds);
+	if (!fileList.empty()) std::qsort(&*fileList.begin(), fileList.size(), sizeof(MyFileListItem*), compareFileList);   // sort and keep original relative order of equivalent elements.
+	stopWatchStop(pfPikoSeconds);
 }
 
 //************************************
@@ -318,95 +269,47 @@ void SortList(float * pfPikoSeconds)
 // Qualifier:
 // Parameter: float * pfPikoSeconds
 //************************************
-void CreateModsFolderList(float * pfPikoSeconds)
+void createModsFolderList(float* pfPikoSeconds)
 {
-	StopWatchStart(pfPikoSeconds);
-	TCHAR searchPattern[MAX_PATH];
-	TCHAR listFilesPath1[MAX_PATH];
-	TCHAR listFilesPath2[MAX_PATH];
-
-	std::vector<wstring> FolderNames;
+	stopWatchStart(pfPikoSeconds);
+	std::vector<wstring> folderNames;
 
 	try {
-		if (_tcsicmp(ModsFolder, L"none") != 0) {
+		if (!iequals(modsFolder, L"none")) {
 			WIN32_FIND_DATA FindFileData;
-			_stprintf(searchPattern, L"%s%s\\*.*", ExePath, ModsFolder);
-			HANDLE hFind = FindFirstFile(searchPattern, &FindFileData);
+			std::wstring searchPattern = exePath + modsFolder + L"\\*.*";
+			HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &FindFileData);
 
 			if (hFind != INVALID_HANDLE_VALUE) {
 				do {
-					if ((_tcscmp(FindFileData.cFileName, L".") == 0)
-						|| (_tcscmp(FindFileData.cFileName, L"..") == 0)
-						|| (_tcsncmp(FindFileData.cFileName, L"-", 1) == 0)) {
+					std::wstring fileName(FindFileData.cFileName);
+					if (fileName._Equal(L".")
+						|| fileName._Equal(L"..")
+						|| fileName._Starts_with(L"-")) {
 						continue;
 					}
-
 					if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-						FolderNames.push_back(FindFileData.cFileName);
+						folderNames.push_back(fileName);
 				} while (FindNextFile(hFind, &FindFileData));
 
 				FindClose(hFind);
 
-				std::sort(FolderNames.begin(), FolderNames.end());
+				std::sort(folderNames.begin(), folderNames.end());
 
-				for (std::vector<wstring>::iterator Name = FolderNames.begin(); Name != FolderNames.end(); ++Name)
+				for (std::vector<wstring>::iterator folderName = folderNames.begin(); folderName != folderNames.end(); ++folderName)
 				{
-					_stprintf(listFilesPath1, L"%s%s\\%s\\", ExePath, ModsFolder, Name->c_str());
-					_stprintf(listFilesPath2, L"%s\\%s\\", ModsFolder, Name->c_str());
-					ListFiles(listFilesPath1, listFilesPath1, listFilesPath2);
+					std::wstring listFilesPath1 = exePath + modsFolder + L"\\" + *folderName + L"\\";
+					std::wstring listFilesPath2 = modsFolder + L"\\" + *folderName + L"\\";
+					listFiles(listFilesPath1, listFilesPath1, listFilesPath2);
 				}
 			}
 		}
 	}
 	catch (...) {
-		TRACE(L"Error creating Files List from Folder %s\r\n", ModsFolder);
+		TRACE(L"Error creating Files List from Folder %s\r\n", modsFolder.c_str());
 	}
 
-	StopWatchStop(pfPikoSeconds);
-}
-
-//************************************
-// Method:    CreateCachedModsFolderList
-// FullName:  CreateCachedModsFolderList
-// Access:    public 
-// Returns:   bool
-// Qualifier:
-// Parameter: float * pfPikoSeconds
-//************************************
-bool CreateCachedModsFolderList(float * pfPikoSeconds)
-{
-	bool bRetVal = false;
-	CHAR cCachedListFileName[MAX_PATH];
-
-	try {
-		if (ModsFolder != L"none") {
-			StopWatchStart(pfPikoSeconds);
-			_stprintf(CachedListFileName, L"%s%s\\~wrapper.cache", ExePath, ModsFolder);
-
-			if (FileExists(CachedListFileName)) {
-				bRetVal = ReadCachedFileList(CachedListFileName);
-			}
-
-			if (!bRetVal) {
-				wcstombs(cCachedListFileName, CachedListFileName, MAX_PATH);
-				g_cachedListFile = fopen(cCachedListFileName, "wt");
-				CreateModsFolderList(NULL);
-				fflush(g_cachedListFile);
-				fclose(g_cachedListFile);
-				g_cachedListFile = NULL;
-			}
-
-			StopWatchStop(pfPikoSeconds);
-		}
-		else {
-			bRetVal = true;
-		}
-	}
-	catch (...) {
-		TRACE(L"Error creating cached Files List from Folder %s\r\n", ModsFolder);
-	}
-
-	return bRetVal;
+	stopWatchStop(pfPikoSeconds);
 }
 
 //************************************
@@ -417,130 +320,22 @@ bool CreateCachedModsFolderList(float * pfPikoSeconds)
 // Qualifier:
 // Parameter: float * pfPikoSeconds
 //************************************
-void CreateFilesFolderList(float * pfPikoSeconds)
+void createFilesFolderList(float * pfPikoSeconds)
 {
-	StopWatchStart(pfPikoSeconds);
-	TCHAR listFilesPath1[MAX_PATH];
-	TCHAR listFilesPath2[MAX_PATH];
+	stopWatchStart(pfPikoSeconds);
 
 	try {
-		if (FilesFolder != L"none") {
-			_stprintf(listFilesPath1, L"%s%s\\", ExePath, FilesFolder);
-			_stprintf(listFilesPath2, L"%s\\", FilesFolder);
-			ListFiles(listFilesPath1, listFilesPath1, listFilesPath2);
+		if (!iequals(filesFolder, L"none")) {
+			std::wstring listFilesPath1 = exePath + filesFolder + L"\\";
+			std::wstring listFilesPath2 = filesFolder + L"\\";
+			listFiles(listFilesPath1, listFilesPath1, listFilesPath2);
 		}
 	}
 	catch (...) {
-		TRACE(L"Error creating Files List from Folder %s\r\n", FilesFolder);
+		TRACE(L"Error creating Files List from Folder %s\r\n", filesFolder.c_str());
 	}
 
-	StopWatchStop(pfPikoSeconds);
-}
-
-//************************************
-// Method:    CreateCachedFilesFolderList
-// FullName:  CreateCachedFilesFolderList
-// Access:    public 
-// Returns:   bool
-// Qualifier:
-// Parameter: float * pfPikoSeconds
-//************************************
-bool CreateCachedFilesFolderList(float * pfPikoSeconds)
-{
-	bool bRetVal = false;
-	CHAR cCachedListFileName[MAX_PATH];
-
-	try {
-		if (FilesFolder != L"none") {
-			StopWatchStart(pfPikoSeconds);
-			_stprintf(CachedListFileName, L"%s%s\\~wrapper.cache", ExePath, FilesFolder);
-
-			if (FileExists(CachedListFileName)) {
-				bRetVal = ReadCachedFileList(CachedListFileName);
-			}
-
-			if (!bRetVal) {
-				wcstombs(cCachedListFileName, CachedListFileName, MAX_PATH);
-				g_cachedListFile = fopen(cCachedListFileName, "wt");
-				CreateFilesFolderList(NULL);
-				fflush(g_cachedListFile);
-				fclose(g_cachedListFile);
-				g_cachedListFile = NULL;
-			}
-
-			StopWatchStop(pfPikoSeconds);
-		}
-		else {
-			bRetVal = true;
-		}
-	}
-	catch (...) {
-		TRACE(L"Error creating cached Files List from Folder %s\r\n", FilesFolder);
-	}
-
-	return bRetVal;
-}
-
-//************************************
-// Method:    ReadCachedFileList
-// FullName:  ReadCachedFileList
-// Access:    public 
-// Returns:   bool
-// Qualifier:
-// Parameter: const TCHAR * pCachedFileListName
-//************************************
-bool ReadCachedFileList(LPCTSTR pCachedFileListName)
-{
-	CHAR cCachedListFileName[MAX_PATH];
-	CHAR cachedFileLineBuf[MAX_PATH * 2];
-	wcstombs(cCachedListFileName, pCachedFileListName, MAX_PATH);
-
-	try {
-		g_cachedListFile = fopen(cCachedListFileName, "rt");
-
-		if (g_cachedListFile == NULL) {
-			return false;
-		}
-
-		while (!feof(g_cachedListFile)) {
-			fgets(cachedFileLineBuf, MAX_PATH * 2, g_cachedListFile);
-			int iLineLen = strlen(cachedFileLineBuf);
-			while (((cachedFileLineBuf[iLineLen - 1] == '\r')
-				|| (cachedFileLineBuf[iLineLen - 1] == '\n'))
-				&& iLineLen > 0) {
-				cachedFileLineBuf[iLineLen - 1] = '\0';
-				iLineLen--;
-			}
-
-			if (iLineLen > 20) {  // ensure the line is valid
-				try {
-					if (strstr(cachedFileLineBuf, "~wrapper.cache") != NULL) {
-						continue;
-					}
-
-					LPSTR fileString = strstr(cachedFileLineBuf, "?");
-					strcpy(fileString, "\0");
-					fileString++;
-					MyFileListItem* MyStruct = new MyFileListItem();
-					MyStruct->filePath = new CHAR[strlen(fileString) + 1];
-					strcpy(MyStruct->filePath, fileString);
-					sscanf(cachedFileLineBuf, "%I64X", &MyStruct->hash);
-					MyStruct->dwIndex = g_dwIndex++;
-					FileList.push_back(MyStruct);
-				}
-				catch (...) {
-					TRACE(L"Error Parsing Line \"%s\" from wrapper cache file \"%s\"!\r\n", cachedFileLineBuf, pCachedFileListName);
-				}
-			}
-		}
-	}
-	catch (...) {
-		TRACE("Error reading cached file list\r\n");
-	}
-
-	fclose(g_cachedListFile);
-	g_cachedListFile = NULL;
-	return true;
+	stopWatchStop(pfPikoSeconds);
 }
 
 //************************************
@@ -550,125 +345,118 @@ bool ReadCachedFileList(LPCTSTR pCachedFileListName)
 // Returns:   void
 // Qualifier:
 //************************************
-void GetCommandLineParams()
+void getCommandLineParams()
 {
 	try {
-		if (IsServerExe()) {
-			_stprintf(IniFileName, L"%s%s", ExePath, SERVER_INI);
-			TRACE("Server Launcher detected.\r\n");
+		if (isServerExe()) {
+			iniFileName = exePath + SERVER_INI;
+			TRACE(L"Server Launcher detected.\r\n");
 		}
 		else {
-			_stprintf(IniFileName, L"%s%s", ExePath, CLIENT_INI);
+			iniFileName = exePath + CLIENT_INI;
 		}
+		int iModType = GetPrivateProfileIntW(L"Settings", L"ModType", 1, iniFileName.c_str());
 
-		int iModType = GetPrivateProfileInt(L"Settings", L"ModType", 1, IniFileName);
-		TCHAR modTypeSection[16];
-		_stprintf(modTypeSection, L"Modtype_%02d", iModType);
-		GetPrivateProfileString(modTypeSection, L"Files", L"none", FilesFolder, MAX_PATH, IniFileName);
-		GetPrivateProfileString(modTypeSection, L"Mods", L"none", ModsFolder, MAX_PATH, IniFileName);
-		g_bUseCachedFileLists = GetPrivateProfileInt(L"Settings", L"UseCachedFileLists", false, IniFileName) != 0;
+		wchar_t* format = L"Modtype_%02d";
+		int size = std::swprintf(nullptr, 0, format, iModType);
+		std::wstring modTypeSection(size + 1, '\0');
+		std::swprintf(&modTypeSection[0], modTypeSection.size(), format, iModType);
+		LPWSTR iniBuf = new WCHAR[MAX_PATH];
+		GetPrivateProfileStringW(modTypeSection.c_str(), L"Files", L"none", iniBuf, MAX_PATH, iniFileName.c_str());
+		filesFolder = std::wstring(iniBuf);
+		GetPrivateProfileStringW(modTypeSection.c_str(), L"Mods", L"none", iniBuf, MAX_PATH, iniFileName.c_str());
+		modsFolder = std::wstring(iniBuf);
+		delete[] iniBuf;
 
-		if ((iModType != 0)
-			&& (_tcsicmp(FilesFolder, L"none") == 0)
-			&& (_tcsicmp(ModsFolder, L"none") == 0)) {
-			TRACE("Modtype != 0 but neither Files nor Mods Folder set, using static assignments!");
-			TRACE("***       It seems you are using an outdated il2fb.ini file format!       ***");
+		if (iModType != 0
+			&& iequals(filesFolder, L"none")
+			&& iequals(modsFolder, L"none")) {
+			TRACE(L"Modtype != 0 but neither Files nor Mods Folder set, using static assignments!");
+			TRACE(L"***       It seems you are using an outdated il2fb.ini file format!       ***");
 
 			switch (iModType) {
 			case 1:
-				_tcscpy(FilesFolder, L"FILES");
-				_tcscpy(ModsFolder, L"MODS");
+				filesFolder = FILES_DEFAULT;
+				modsFolder = MODS_DEFAULT;
 				break;
 
 			case 2:
-				_tcscpy(FilesFolder, L"none");
-				_tcscpy(ModsFolder, L"#SAS");
+				filesFolder = FILES_MODACT3;
+				modsFolder = MODS_MODACT3;
 				break;
 
 			case 3:
-				_tcscpy(FilesFolder, L"none");
-				_tcscpy(ModsFolder, L"#UP#");
+				filesFolder = FILES_UP3;
+				modsFolder = MODS_UP3;
 				break;
 
 			case 4:
-				_tcscpy(FilesFolder, L"none");
-				_tcscpy(ModsFolder, L"#DBW");
+				filesFolder = FILES_DBW;
+				modsFolder = MODS_DBW;
 				break;
 
 			case 5:
-				_tcscpy(FilesFolder, L"none");
-				_tcscpy(ModsFolder, L"#DBW_1916");
+				filesFolder = FILES_DBW_1916;
+				modsFolder = MODS_DBW_1916;
 				break;
 
 			case 0:
 			default:
-				_tcscpy(FilesFolder, L"none");
-				_tcscpy(ModsFolder, L"none");
+				filesFolder = MODS_STOCK;
+				modsFolder = FILES_STOCK;
 				break;
 			}
 		}
 
-		LPTSTR *argList;
+		LPWSTR *argList;
 		int nArgs;
-		// Get the argument list
 		argList = CommandLineToArgvW(GetCommandLineW(), &nArgs);
-		// Parse Command Line Arguments
 		if ((argList != NULL) && (nArgs != 0)) {
 			for (int i = 1; i < nArgs; i++) {
-				_tcscpy(CurParam, argList[i]);
-				_tcslwr(CurParam);
-				LPTSTR lpCurParam = CurParam;
-				TRACE(L"Command Line Parameter No. %d = %s\r\n", i, lpCurParam);
-				trim(lpCurParam, L" ");
-
-				if (_tcschr(L"/", lpCurParam[0])) {
-					lpCurParam = _tcsinc(lpCurParam);
+				curParam = toLower(std::wstring(argList[i]));
+				trim(curParam);
+				TRACE(L"Command Line Parameter No. %d = %s\r\n", i, curParam.c_str());
+				if (curParam.rfind(L"/", 0) == 0) {
+					curParam = curParam.substr(1);
 				}
-
-				if (_tcsstr(lpCurParam, L"f:") == lpCurParam) {
-					lpCurParam = _tcsninc(lpCurParam, 2);
-					trim(lpCurParam, L"\"");
-					_tcscpy(FilesFolder, lpCurParam);
+				if (curParam.rfind(L"f:", 0) == 0) {
+					filesFolder = curParam.substr(2);
+					trim(filesFolder, L"\"");
 				}
-				else if (_tcsstr(lpCurParam, L"m:") == lpCurParam) {
-					lpCurParam = _tcsninc(lpCurParam, 2);
-					trim(lpCurParam, L"\"");
-					_tcscpy(ModsFolder, lpCurParam);
+				else if (curParam.rfind(L"m:", 0) == 0) {
+					modsFolder = curParam.substr(2);
+					trim(modsFolder, L"\"");
 				}
-				else if (_tcsstr(lpCurParam, L"lb:") == lpCurParam) {
-					lpCurParam = _tcsninc(lpCurParam, 3);
-					trim(lpCurParam, L"\"");
-					_tcscpy(LinkBackName, ExePath);
-					_tcscat(LinkBackName, lpCurParam);
-				}
-				else if (_tcsstr(lpCurParam, L"cache") == lpCurParam) {
-					g_bUseCachedFileLists = true;
+				else if (curParam.rfind(L"lb:", 0) == 0) {
+					linkBackName = curParam.substr(3);
+					trim(linkBackName, L"\"");
+					linkBackName = exePath + linkBackName;
 				}
 			}
 		}
 
-		if (_tcslen(ModsFolder) == 0 || _tcsicmp(ModsFolder, L"none") == 0) {
-			TRACE("No MODS Folder set\r\n");
+		if (modsFolder.length() == 0 || iequals(modsFolder, L"none")) {
+			TRACE(L"No MODS Folder set\r\n");
 		}
 		else {
-			TRACE(L"MODS Folder = \"%s\"\r\n", ModsFolder);
+			TRACE(L"MODS Folder = \"%s\"\r\n", modsFolder.c_str());
 		}
 
-		if (_tcslen(FilesFolder) == 0 || _tcsicmp(FilesFolder, L"none") == 0) {
-			TRACE("No FILES Folder set.\r\n");
+		if (filesFolder.length() == 0 || iequals(filesFolder, L"none")) {
+			TRACE(L"No FILES Folder set\r\n");
 		}
 		else {
-			TRACE(L"FILES Folder = \"%s\".\r\n", FilesFolder);
+			TRACE(L"FILES Folder = \"%s\"\r\n", filesFolder.c_str());
 		}
 
-		int iDumpMode = GetPrivateProfileInt(L"Settings", L"DumpMode", 0, IniFileName);
-		if (iDumpMode & 0x01) g_bDumpFileAccess = TRUE;
-		if (iDumpMode & 0x02) g_bDumpClassFiles = TRUE;
-		if (iDumpMode & 0x04) g_bDumpOtherFiles = TRUE;
+		int iDumpMode = GetPrivateProfileIntW(L"Settings", L"DumpMode", 0, iniFileName.c_str());
+		if (iDumpMode & 0x01) g_bDumpFileAccess = true;
+		if (iDumpMode & 0x02) g_bDumpClassFiles = true;
+		if (iDumpMode & 0x04) g_bDumpOtherFiles = true;
 
 	}
 	catch (...) {
-		TRACE("Error reading command line parameters / ini file\r\n");
+		TRACE(L"Error reading command line parameters / ini file\r\n");
 	}
 }
 
@@ -679,22 +467,22 @@ void GetCommandLineParams()
 // Returns:   void
 // Qualifier:
 //************************************
-void LinkIl2fbExe()
+void linkIl2fbExe()
 {
 	try {
 		if (hExecutable == NULL) {
-			TRACE(L"Trying to link back to %s through LoadLibrary()\r\n", LinkBackName);
-			hExecutable = LoadLibrary(LinkBackName);
+			TRACE(L"Trying to link back to %s through LoadLibrary()\r\n", linkBackName.c_str());
+			hExecutable = LoadLibrary(linkBackName.c_str());
 		}
 
 		if (hExecutable == NULL) {
-			TRACE(L"Linking back to %s through LoadLibrary() failed, linking back to calling process.\r\n", LinkBackName);
+			TRACE(L"Linking back to %s through LoadLibrary() failed, linking back to calling process.\r\n", linkBackName.c_str());
 			hExecutable = GetModuleHandle(NULL);
 		}
 
 		if (hExecutable == NULL) {
-			TRACE("Linking back to calling process failed.\r\n");
-			MessageBox(NULL, L"Attaching to IL-2 Executable failed!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
+			TRACE(L"Linking back to calling process failed.\r\n");
+			MessageBoxW(NULL, L"Attaching to IL-2 Executable failed!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
 			ExitProcess(-1);
 		}
 
@@ -712,8 +500,8 @@ void LinkIl2fbExe()
 		}
 
 		if (SFS_open == NULL && SFS_open_cpp == NULL) {
-			TRACE("SFS open function pointer missing.\r\n");
-			MessageBox(NULL, L"SFS open function pointer missing!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
+			TRACE(L"SFS open function pointer missing.\r\n");
+			MessageBoxW(NULL, L"SFS open function pointer missing!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
 			ExitProcess(-1);
 		}
 
@@ -731,24 +519,15 @@ void LinkIl2fbExe()
 		}
 			
 		if (SFS_openf == NULL && SFS_openf_cpp == NULL) {
-			TRACE("SFS openf function pointer missing.\r\n");
-			MessageBox(NULL, L"SFS openf function pointer missing!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
+			TRACE(L"SFS openf function pointer missing.\r\n");
+			MessageBoxW(NULL, L"SFS openf function pointer missing!", L"SAS wrapper", MB_OK | MB_ICONERROR | MB_TOPMOST);
 			ExitProcess(-1);
 		}
-
-		//if (SFS_read == NULL) {
-		//	SFS_read = (TSFS_read*)GetProcAddress(hExecutable, "SFS_read");
-		//}
-		//if (SFS_lseek == NULL) {
-		//	SFS_lseek = (TSFS_lseek*)GetProcAddress(hExecutable, "SFS_lseek");
-		//}
-
 	}
 	catch (...) {
-		TRACE("Error creating backlink to IL-2 executable\r\n");
+		TRACE(L"Error creating backlink to IL-2 executable\r\n");
 	}
 }
-
 
 //************************************
 // Method:    RemoveDuplicates
@@ -758,17 +537,17 @@ void LinkIl2fbExe()
 // Qualifier:
 // Parameter: float * pfPikoSeconds
 //************************************
-int RemoveDuplicates(float * pfPikoSeconds)
+int removeDuplicates(float * pfPikoSeconds)
 {
-	StopWatchStart(pfPikoSeconds);
+	stopWatchStart(pfPikoSeconds);
 	int iRetVal = 0;
 
-	if (!FileList.empty()) {
+	if (!fileList.empty()) {
 		try {
 			MyFileListItem* dupElement = NULL;
 
-			for (int i = 0; i < (int)FileList.size(); i++) {
-				MyFileListItem* listElement = FileList[i];
+			for (int i = 0; i < (int)fileList.size(); i++) {
+				MyFileListItem* listElement = fileList[i];
 
 				if (dupElement != NULL) {
 					if (listElement->hash == dupElement->hash) {
@@ -782,11 +561,11 @@ int RemoveDuplicates(float * pfPikoSeconds)
 			}
 		}
 		catch (...) {
-			TRACE("Error removing duplicates from list\r\n");
+			TRACE(L"Error removing duplicates from list\r\n");
 		}
 	}
 
-	StopWatchStop(pfPikoSeconds);
+	stopWatchStop(pfPikoSeconds);
 	return iRetVal;
 }
 
@@ -801,17 +580,17 @@ int RemoveDuplicates(float * pfPikoSeconds)
 //************************************
 int binarySearchFileList(unsigned __int64 theHash)
 {
-	if (FileList.empty()) return -1;
+	if (fileList.empty()) return -1;
 	float fPikoSeconds = 0.;
-	StopWatchStart(&fPikoSeconds);
+	stopWatchStart(&fPikoSeconds);
 	int first = 0;
-	int last = FileList.size() - 1;
+	int last = fileList.size() - 1;
 	int mid = 0;
 
 	while (first < last) {
 		g_SearchIterations++;
-		unsigned __int64 hashSpan = FileList[last]->hash - FileList[first]->hash;
-		unsigned __int64 hashDistance = theHash - FileList[first]->hash;
+		unsigned __int64 hashSpan = fileList[last]->hash - fileList[first]->hash;
+		unsigned __int64 hashDistance = theHash - fileList[first]->hash;
 		float fHashDistance = (float)hashDistance / (float)hashSpan;
 
 		if (fHashDistance > 1.0) {
@@ -820,136 +599,109 @@ int binarySearchFileList(unsigned __int64 theHash)
 
 		mid = (int)((last - first) * fHashDistance) + first;
 
-		if (theHash > FileList[mid]->hash) {
+		if (theHash > fileList[mid]->hash) {
 			first = mid + 1;
 		}
-		else if (theHash < FileList[mid]->hash) {
+		else if (theHash < fileList[mid]->hash) {
 			last = mid - 1;
 		}
 		else {
-			StopWatchStop(&fPikoSeconds);
+			stopWatchStop(&fPikoSeconds);
 			g_SearchPikoseconds += fPikoSeconds;
 			return mid;      // found it. return position
 		}
 	}
 
-	if (theHash == FileList[mid]->hash) {
+	if (theHash == fileList[mid]->hash) {
 		return mid;
 	}
 
 	return -1;     // failed to find key
 }
 
-unsigned __int64 SFS_hashW(const unsigned __int64 hash, LPCTSTR buf, const int len)
-{
-	ZeroMemory(cBuf, sizeof(cBuf));
-	wcstombs(cBuf, buf, _tcslen(buf));
-	unsigned __int64 retVal = SFS_hash(hash, cBuf, len);
-	return retVal;
-}
-
-bool isHashedClass(LPCTSTR lpFilePath, LPCTSTR lpFileName) {
-	if (!(_tcslen(lpFileName) == 16)) return false;
-	for (UINT32 i = 0; i < _tcslen(lpFileName); i++)
-		if (!isxdigit(lpFileName[i])) return false;
+bool isHashedClass(const std::wstring& filePath, const std::wstring& fileName) {
+	if (fileName.length() != 16) return false;
+	for (size_t i = 0; i < fileName.length(); i++) {
+		if (!std::iswxdigit(fileName.at(i))) return false;
+	}
 	return true;
 }
 
-LPTSTR _tcsreplace(LPTSTR theString, char theCharToReplace, char replaceWith) {
-	while (*theString != L'\0') {
-		if (*theString == theCharToReplace)
-			*theString = replaceWith;
-		theString++;
-	}
-	return theString;
-}
-
-void ListFiles(LPCTSTR lpParent, LPCTSTR lpRoot, LPCTSTR lpAddFront)
+void listFiles(const std::wstring& parent, const std::wstring& root, const std::wstring& addFront)
 {
-	TCHAR Dir[MAX_PATH];
-	TCHAR foundItem[MAX_PATH];
-	TCHAR foundItemUpperCase[MAX_PATH];
-	TCHAR searchPattern[MAX_PATH];
-	std::vector<wstring> FolderNames;
-	std::vector<wstring> FileNames;
-	_tcscpy(Dir, lpParent);
+	std::vector<wstring> folderNames;
+	std::vector<wstring> fileNames;
 
-	if (_tcschr(L"\\", Dir[_tcslen(Dir) - 1]) == NULL) {
-		_tcscat(Dir, L"\\");
+	std::wstring dir = parent;
+	if (dir.compare(dir.length() - 1, 1, L"\\") != 0) {
+		dir += L"\\";
 	}
-
 	WIN32_FIND_DATA FindFileData;
-	_stprintf(searchPattern, L"%s*.*", Dir);
-	HANDLE hFind = FindFirstFile(searchPattern, &FindFileData);
+	std::wstring searchPattern = dir + L"*.*";
+	HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &FindFileData);
 
 	if (hFind != INVALID_HANDLE_VALUE) {
 		do {
-			if ((_tcscmp(FindFileData.cFileName, L".") == 0)
-				|| (_tcscmp(FindFileData.cFileName, L"..") == 0)) {
+			std::wstring fileName(FindFileData.cFileName);
+			if (fileName.compare(L".") == 0
+				|| fileName.compare(L"..") == 0) {
 				continue;
 			}
 			if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-				FolderNames.push_back(FindFileData.cFileName);
+				folderNames.push_back(fileName);
 			else
-				FileNames.push_back(FindFileData.cFileName);
+				fileNames.push_back(fileName);
 		} while (FindNextFile(hFind, &FindFileData));
 		FindClose(hFind);
 
-		std::sort(FolderNames.begin(), FolderNames.end());
-		std::sort(FileNames.begin(), FileNames.end());
+		std::sort(folderNames.begin(), folderNames.end());
+		std::sort(fileNames.begin(), fileNames.end());
 
-		for (std::vector<wstring>::iterator Name = FolderNames.begin(); Name != FolderNames.end(); ++Name)
+		for (std::vector<wstring>::iterator name = folderNames.begin(); name != folderNames.end(); ++name)
 		{
-			_stprintf(foundItem, L"%s%s", Dir, Name->c_str());
-			ListFiles(foundItem, lpRoot, lpAddFront);
+			std::wstring foundItem = dir + *name;
+			listFiles(foundItem, root, addFront);
 		}
 
-		for (std::vector<wstring>::iterator Name = FileNames.begin(); Name != FileNames.end(); ++Name)
+		for (std::vector<wstring>::iterator name = fileNames.begin(); name != fileNames.end(); ++name)
 		{
-			_stprintf(foundItem, L"%s%s", Dir, Name->c_str());
-			MyFileListItem* MyStruct = new MyFileListItem();
-			LPTSTR foundItemFromRoot = foundItem + _tcslen(lpRoot);
-			int iFilePathLen = _tcslen(lpAddFront) + _tcslen(foundItemFromRoot);
-			TCHAR* szFilePath = (TCHAR*)calloc((iFilePathLen + 1), sizeof(TCHAR));
-			_stprintf(szFilePath, L"%s%s", lpAddFront, foundItemFromRoot);
-			MyStruct->filePath = new CHAR[iFilePathLen + 1];
-			wcstombs(MyStruct->filePath, szFilePath, iFilePathLen);
-			MyStruct->filePath[iFilePathLen] = '\0';
-			free(szFilePath);
-			_tcscpy(foundItemUpperCase, foundItemFromRoot);
-			_tcsupr(foundItemUpperCase);
-			int foundLen = _tcslen(Name->c_str());
-			if (isHashedClass(foundItem, Name->c_str())) // Fixed 2017-08-30, no need to double-hash files
-				MyStruct->hash = _tcstoull(Name->c_str(), NULL, 16);
-			else if (foundLen > 6 && _tcsnicmp(&(Name->c_str())[foundLen - 6], L".class", 6) == 0) { // New 2017-08-30, read clearname class files
-				ZeroMemory(szBuf, sizeof(szBuf));
-				foundItemFromRoot[_tcslen(foundItemFromRoot) - 6] = '\0';
-				_tcsreplace(foundItemFromRoot, L'\\', L'.');
-				_tcsreplace(foundItemFromRoot, L'/', L'.');
-				_stprintf(szBuf, L"sdw%scwc2w9e", foundItemFromRoot);
-				_stprintf(szBuf, L"cod/%d", IntFN(0, szBuf));
-				MyStruct->hash = LongFN(0, szBuf);
+			std::wstring foundItem = dir + *name;
+			MyFileListItem* fileListItem = new MyFileListItem();
+			std::wstring foundItemFromRoot = foundItem.substr(root.length());
+			using convert_typeX = std::codecvt_utf8<wchar_t>;
+			std::wstring_convert<convert_typeX, wchar_t> converterX;
+			fileListItem->filePath = converterX.to_bytes(addFront + foundItemFromRoot);
+			std::wstring foundItemUpperCase = toUpper(foundItemFromRoot);
+			int foundLen = (*name).length();
+			if (isHashedClass(foundItem, *name))
+				fileListItem->hash = std::wcstoull((*name).c_str(), NULL, 16);   //  _tcstoull(Name->c_str(), NULL, 16);
+			else if (foundLen > 6 && iequals((*name).substr((*name).length()-6,6), L".class")) {
+				foundItemFromRoot = foundItemFromRoot.substr(0, foundItemFromRoot.length() - 6);
+				std::replace(foundItemFromRoot.begin(), foundItemFromRoot.end(), L'\\', L'.');
+				std::replace(foundItemFromRoot.begin(), foundItemFromRoot.end(), L'/', L'.');
+				std::wstring hash1 = L"sdw" + foundItemFromRoot + L"cwc2w9e";
+				std::wstring hash2 = L"cod/" + std::to_wstring((int)intFN(0, hash1));
+				fileListItem->hash = longFN(0, hash2);
 			}
 			else
-				MyStruct->hash = SFS_hashW(0, foundItemUpperCase, _tcslen(foundItemUpperCase));
-			MyStruct->dwIndex = g_dwIndex++;
-			FileList.push_back(MyStruct);
-
-			if (g_cachedListFile != NULL) {
-				fprintf(g_cachedListFile, "%016I64X?%s\n", MyStruct->hash, MyStruct->filePath);
-			}
+				fileListItem->hash = sfs_hashW(0, foundItemUpperCase);
+			fileListItem->dwIndex = g_dwIndex++;
+			fileList.push_back(fileListItem);
+			//TRACE("File: Index %d Hash %016I64X Path \"%s\"\r\n", fileListItem->dwIndex, fileListItem->hash, fileListItem->filePath.c_str());
 		}
 	}
 }
 
-unsigned __int64 SFS_hash(const unsigned __int64 hash, const void *buf, const int len)
+unsigned __int64 sfs_hashW(const unsigned __int64 hash, const std::wstring &str)
 {
 	unsigned char c;
 	unsigned a = (unsigned)(hash & 0xFFFFFFFF);
 	unsigned b = (unsigned)(hash >> 32 & 0xFFFFFFFF);
 
-	for (int i = 0; i < len; i++) {
-		c = ((unsigned char *)buf)[i];
+	int len = str.length();
+
+	for (int pos = 0; pos < len; pos++) {
+		c = ((static_cast<unsigned char>(str.at(pos))));
 		a = (a << 8 | c) ^ FPaTable[a >> 24];
 		b = (b << 8 | c) ^ FPbTable[b >> 24];
 	}
@@ -957,13 +709,13 @@ unsigned __int64 SFS_hash(const unsigned __int64 hash, const void *buf, const in
 	return (unsigned __int64)a & 0xFFFFFFFF | (unsigned __int64)b << 32;
 }
 
-unsigned __int64 LongFN(unsigned __int64 paramLong, LPCTSTR paramString) {
-	int paramLen = _tcslen(paramString);
+unsigned __int64 longFN(unsigned __int64 i, const std::wstring& str) {
+	int len = str.length();
 	unsigned __int32 c;
-	unsigned __int32 a = (unsigned)(paramLong & 0xFFFFFFFF);
-	unsigned __int32 b = (unsigned)(paramLong >> 32 & 0xFFFFFFFF);
-	for (int i = 0; i < paramLen; i++) {
-		c = (unsigned __int32)paramString[i];
+	unsigned __int32 a = (unsigned)(i & 0xFFFFFFFF);
+	unsigned __int32 b = (unsigned)(i >> 32 & 0xFFFFFFFF);
+	for (int pos = 0; pos < len; pos++) {
+		c = (unsigned __int32)(static_cast<unsigned char>(str.at(pos)));
 		if ((c > 96) && (c < 123))
 			c &= 223;
 		else if (c == 47)
@@ -974,13 +726,14 @@ unsigned __int64 LongFN(unsigned __int64 paramLong, LPCTSTR paramString) {
 	return ((unsigned __int64)a & 0xFFFFFFFF) | ((unsigned __int64)b << 32);
 }
 
-unsigned __int32 IntFN(unsigned __int32 paramInt, LPCTSTR paramString) {
-	int paramLen = _tcslen(paramString);
+unsigned __int32 intFN(unsigned __int32 i, const std::wstring& str) {
+	int len = str.length();
 	unsigned __int32 c;
 	unsigned __int32 b;
-	unsigned __int32 a = paramInt;
-	for (int i = 0; i < paramLen; i++) {
-		c = (unsigned __int32)paramString[i];
+	unsigned __int32 a = i;
+	for (int pos = 0; pos < len; pos++) {
+		c = (unsigned __int32)(static_cast<unsigned char>(str.at(pos)));
+//		c = (unsigned __int32)str.c_str()[pos];
 		b = c & 0xFF;
 		a = (a << 8 | b) ^ FPaTable[a >> 24];
 		b = c >> 8 & 0xFF;
@@ -989,14 +742,14 @@ unsigned __int32 IntFN(unsigned __int32 paramInt, LPCTSTR paramString) {
 	return (unsigned __int32)a;
 }
 
-void StopWatchStart(float *pfPikoSeconds)
+void stopWatchStart(float *pfPikoSeconds)
 {
 	if (pfPikoSeconds != NULL) {
 		QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&First));
 	}
 }
 
-void StopWatchStop(float *pfPikoSeconds)
+void stopWatchStop(float *pfPikoSeconds)
 {
 	if (pfPikoSeconds != NULL) {
 		ULONGLONG Last;
@@ -1007,14 +760,12 @@ void StopWatchStop(float *pfPikoSeconds)
 	}
 }
 
-BOOL FileExists(LPCTSTR lpcFilename)
+bool fileExists(const std::wstring& fileName)
 {
-	return((GetFileAttributes(lpcFilename) == INVALID_FILE_ATTRIBUTES)
-		? FALSE
-		: TRUE);
+	return std::filesystem::exists(std::filesystem::path(fileName));
 }
 
-bool IsServerExe()
+bool isServerExe()
 {
 	DWORD dwOldProtect = 0;
 	DWORD dwProcRights = DELETE | READ_CONTROL | SYNCHRONIZE | WRITE_DAC | WRITE_OWNER
@@ -1044,55 +795,71 @@ bool IsServerExe()
 				VirtualProtectEx(hCurProc, (LPVOID)iIl2ServerID, 9, dwOldProtect, NULL);
 			}
 			else {
-				TRACE("Error in IsServerExe: Couldn't get access to modded il2fb.exe server ID memory area!\r\n");
+				TRACE(L"Error in IsServerExe: Couldn't get access to modded il2fb.exe server ID memory area!\r\n");
 			}
 		}
 	}
 	catch (...) {
-		TRACE("Error in IsServerExe: Couldn't check modded il2fb.exe server ID!\r\n");
+		TRACE(L"Error in IsServerExe: Couldn't check modded il2fb.exe server ID!\r\n");
 	}
 
 	CloseHandle(hCurProc);
 	return bIsServer;
 }
 
-bool DirectoryExists(LPCTSTR dirName_in)
+bool directoryExists(const std::wstring& dirName_in)
 {
-	DWORD ftyp = GetFileAttributes(dirName_in);
-
-	if (ftyp == INVALID_FILE_ATTRIBUTES) {
-		return false;    //something is wrong with your path!
-	}
-
-	if (ftyp & FILE_ATTRIBUTE_DIRECTORY) {
-		return true;    // this is a directory!
-	}
-
-	return false;    // this is not a directory!
+	return std::filesystem::is_directory(std::filesystem::path(dirName_in));
 }
 
-TCHAR * trim(TCHAR * c, TCHAR*space)
+std::wstring getCurrentExecutablePathName()
 {
-	int i = 0;
-
-	while (c[0] && _tcschr(space, c[0])) {
-		c = _tcsinc(c);
+	int size = MAX_PATH;
+	std::vector<wchar_t> charBuffer(size);
+	while (GetModuleFileNameW(NULL, charBuffer.data(), size) == size) {
+		size *= 2;
+		charBuffer.resize(size);
 	}
-
-	i = _tcslen(c);
-
-	do {
-		c[i] = 0;
-		i--;
-	} while (i >= 0 && _tcschr(space, c[i]));
-
-	return c;
+	return charBuffer.data();
 }
 
-//SASIL2WRAPPER_C_API void __cdecl ReadDump(void *buf, unsigned int len)
-//{
-//	return;
-//}
+std::wstring getDirectoryWithCurrentExecutable()
+{
+	std::experimental::filesystem::path path(getCurrentExecutablePathName());
+	return path.remove_filename().wstring();
+}
+
+std::wstring trim(const std::wstring& str, std::wstring whitespace)
+{
+	const auto strBegin = str.find_first_not_of(whitespace);
+	if (strBegin == std::wstring::npos)
+		return L""; // no content
+
+	const auto strEnd = str.find_last_not_of(whitespace);
+	const auto strRange = strEnd - strBegin + 1;
+
+	return str.substr(strBegin, strRange);
+}
+
+std::wstring toLower(std::wstring data)
+{
+	std::transform(data.begin(), data.end(), data.begin(),
+		[](wchar_t c) { return std::towlower(c); });
+	return data;
+}
+
+std::wstring toUpper(std::wstring data)
+{
+	std::transform(data.begin(), data.end(), data.begin(),
+		[](wchar_t c) { return std::towupper(c); });
+	return data;
+}
+
+bool iequals(const std::wstring& a, const std::wstring& b)
+{
+	if (a.length() != b.length()) return false;
+	return (_wcsnicmp(a.c_str(), b.c_str(), a.length()) == 0);
+}
 
 #ifdef USE_415_CODE
 SASIL2WRAPPER_C_API int __stdcall __SFS_openf(const unsigned __int64 hash, const int flags)
@@ -1105,13 +872,15 @@ SASIL2WRAPPER_C_API int __cdecl __SFS_openf(const unsigned __int64 hash, const i
 	int listPos;
 	unsigned __int64 hash2 = 0;
 	int foundIn = -1;
-	if (!FileList.empty()) {
+	if (!fileList.empty()) {
 		listPos = binarySearchFileList(hash);
 
 		if (listPos == -1) {
-			ZeroMemory(szHashString, sizeof(szHashString));
-			_stprintf(szHashString, L"%016I64X", hash);
-			hash2 = SFS_hashW(0, szHashString, _tcslen(szHashString));
+			wchar_t* format = L"%016I64X";
+			int size = std::swprintf(nullptr, 0, format, hash);
+			std::wstring buf(size + 1, '\0');
+			std::swprintf(&buf[0], buf.size(), format, hash);
+			hash2 = sfs_hashW(0, buf);
 			listPos = binarySearchFileList(hash2);
 			if (listPos != -1) foundIn = 2;
 		}
@@ -1119,13 +888,13 @@ SASIL2WRAPPER_C_API int __cdecl __SFS_openf(const unsigned __int64 hash, const i
 			foundIn = 1;
 		}
 
-		//TRACE("__SFS_openf(%016I64X, %d) - hash2=%016I64X, listPos=%d\r\n", hash, flags, hash2, listPos);
+		//TRACE(L"__SFS_openf(%016I64X, %d) - hash2=%016I64X, listPos=%d\r\n", hash, flags, hash2, listPos);
 
 		if (listPos != -1) {
 			if (SFS_open != NULL)
-				filePointer = SFS_open(FileList[listPos]->filePath, flags);
+				filePointer = SFS_open(const_cast<char*>(fileList[listPos]->filePath.c_str()), flags);
 			else
-				filePointer = SFS_open_cpp(FileList[listPos]->filePath, flags);
+				filePointer = SFS_open_cpp(const_cast<char*>(fileList[listPos]->filePath.c_str()), flags);
 		}
 	}
 
@@ -1161,6 +930,6 @@ SASIL2WRAPPER_C_API int __cdecl __SFS_openf(const unsigned __int64 hash, const i
 
 SASIL2WRAPPER_C_API int __stdcall _SAS_openf(const unsigned __int64 hash, const int flags)
 {
-	//TRACE("__SAS_openf(%016I64X, %d)\r\n", hash, flags);
+	//TRACE(L"__SAS_openf(%016I64X, %d)\r\n", hash, flags);
 	return __SFS_openf(hash, flags);
 }

@@ -109,9 +109,9 @@ int stepRamSize(int baseRamSize)
 //************************************
 void SetRamSliderTicks()
 {
-    SendMessage(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(g_bExpertModeEnabled ? 64 : 128, g_bExpertModeEnabled ? 2048 : 1024));
-    SetDlgItemText(g_hWnd, IDC_STATIC_RAM_MIN, (g_bExpertModeEnabled) ? L"64" : L"128");
-    SetDlgItemText(g_hWnd, IDC_STATIC_RAM_MAX, (g_bExpertModeEnabled) ? L"2048" : L"1024");
+    SendMessage(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG((g_bExpertModeEnabled || g_bRamAutoAdjust) ? 64 : 128, (g_bExpertModeEnabled || g_bRamAutoAdjust) ? 2048 : 1024));
+    SetDlgItemText(g_hWnd, IDC_STATIC_RAM_MIN, (g_bExpertModeEnabled || g_bRamAutoAdjust) ? L"64" : L"128");
+    SetDlgItemText(g_hWnd, IDC_STATIC_RAM_MAX, (g_bExpertModeEnabled || g_bRamAutoAdjust) ? L"2048" : L"1024");
     SendMessage(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), TBM_CLEARTICS, (WPARAM)TRUE, 0);
     SendMessage(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), TBM_SETTIC, (WPARAM)TRUE, 128);
     SendMessage(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), TBM_SETTIC, (WPARAM)TRUE, 256);
@@ -153,6 +153,14 @@ void SettingsToControls()
     ShowModtypeHints(g_iModType);
     g_iRamSize = stepRamSize(g_iRamSize);
     PostMessage(GetDlgItem(g_hWnd, IDC_COMBO_MODTYPES), CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
+
+    CheckDlgButton(g_hWnd, IDC_CHECK_RAM_AUTOADJUST, g_bRamAutoAdjust ? BST_CHECKED : BST_UNCHECKED);
+
+    ShowWindow(GetDlgItem(g_hWnd, IDC_EDIT_RAM), g_bRamAutoAdjust == FALSE);
+    ShowWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM2), g_bRamAutoAdjust == FALSE);
+    ShowWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM_MIN), g_bRamAutoAdjust == FALSE);
+    ShowWindow(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), g_bRamAutoAdjust == FALSE);
+    ShowWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM_MAX), g_bRamAutoAdjust == FALSE);
     SendMessage(GetDlgItem(g_hWnd, IDC_EDIT_RAM), EM_SETREADONLY, !g_bExpertModeEnabled, 0);
 
     if(GetFocus() != GetDlgItem(g_hWnd, IDC_EDIT_RAM)) {
@@ -326,6 +334,8 @@ void ControlsToSettings()
         g_iModType = 0;
     }
 
+    g_bRamAutoAdjust = IsDlgButtonChecked(g_hWnd, IDC_CHECK_RAM_AUTOADJUST);
+
     g_iRamSize = GetDlgItemInt(g_hWnd, IDC_EDIT_RAM, NULL, FALSE);
 
     if(g_iRamSize < 64) {
@@ -386,6 +396,7 @@ void EnableSettingChanges(BOOL bEnable)
         EnableWindow(GetDlgItem(g_hWnd, IDC_COMBO_MODTYPES), bEnable);
         EnableWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM), bEnable);
         SendMessage(GetDlgItem(g_hWnd, IDC_EDIT_RAM), EM_SETREADONLY, !(bEnable && g_bExpertModeEnabled), 0);
+        EnableWindow(GetDlgItem(g_hWnd, IDC_CHECK_RAM_AUTOADJUST), bEnable);
         EnableWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM2), bEnable);
         EnableWindow(GetDlgItem(g_hWnd, IDC_STATIC_RAM_MIN), bEnable);
         EnableWindow(GetDlgItem(g_hWnd, IDC_SLIDER_RAMSIZE), bEnable);

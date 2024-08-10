@@ -26,7 +26,7 @@
 //*************************************************************************
 // Includes
 //*************************************************************************
-#include "StdAfx.h"
+#include "stdafx.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -215,7 +215,12 @@ void ShowCurrentSettings()
         SendDlgItemMessage(g_hWnd, IDC_LIST_SETTINGS, LB_ADDSTRING, (WPARAM)0, (LPARAM)g_szModTypes[1]);
     }
 
-    _stprintf(szBuf, L"Maximum RAM size: %d MB", g_iRamSize);
+    if (g_bRamAutoAdjust) {
+        _stprintf(szBuf, L"Maximum RAM size: Auto Adjust");
+    }
+    else {
+        _stprintf(szBuf, L"Maximum RAM size: %d MB", g_iRamSize);
+    }
     SendDlgItemMessage(g_hWnd, IDC_LIST_SETTINGS, LB_ADDSTRING, (WPARAM)0, (LPARAM)szBuf);
 
     switch(g_iMemStrategy) {
@@ -435,6 +440,11 @@ void SASES_OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
             g_iDumpMode |= DUMP_MODE_SFS_ACCESS;
         else
             g_iDumpMode &= ~DUMP_MODE_SFS_ACCESS;
+        SettingsToControls();
+        break;
+
+    case IDC_CHECK_RAM_AUTOADJUST:
+        g_bRamAutoAdjust = IsDlgButtonChecked(g_hWnd, IDC_CHECK_RAM_AUTOADJUST);
         SettingsToControls();
         break;
 

@@ -50,7 +50,7 @@
 #define IL2GE_PATHS			{L"il2ge.dll", L"il2ge\\lib\\il2ge.dll", L"bin\\selector\\basefiles\\il2ge.dll"}
 #define IL2GE_PATHS_NUM		3
 #define	XSS_DIVIDER			128
-#define PERM_DIVIDER		8
+//#define PERM_DIVIDER		4 // was 8
 
 #define MEM_STRATEGY_BALANCED		0
 #define MEM_STRATEGY_CONSERVATIVE	1
@@ -68,6 +68,8 @@
 //*************************************************************************
 void AdjustJvmParams();
 void ReadSelectorSettings();
+void AdjustRam();
+void AddMandatoryJvmOptions();
 void GetParams();
 BOOL IsServerExe();
 BOOL StartWatchdog();
