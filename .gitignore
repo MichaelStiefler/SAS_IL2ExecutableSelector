@@ -362,3 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /.svn
+Debug_415
+Release_415
+/2023-03-03.7z
