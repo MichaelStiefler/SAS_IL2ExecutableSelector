@@ -365,3 +365,13 @@ FodyWeavers.xsd
 Debug_415
 Release_415
 /2023-03-03.7z
+/public release/lib/audio/soundbank.gm
+/public release/lib/cmm/CIEXYZ.pf
+/public release/lib/cmm/GRAY.pf
+/public release/lib/cmm/LINEAR_RGB.pf
+/public release/lib/cmm/PYCC.pf
+/public release/lib/cmm/sRGB.pf
+/public release/lib/fonts
+/public release/lib/images/cursors
+/public release/lib/security
+/public release/lib
